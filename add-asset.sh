@@ -134,13 +134,13 @@ print(f"   ✅ Added '{filename}' to {search_str} group")
 PYEOF
 fi
 
-# ── 4. Git commit + push ──────────────────────────────────────────────────────
-echo "🚀 Pushing to GitHub..."
+# ── 4. Git commit (no auto-push) ─────────────────────────────────────────────
+echo "📦 Committing to git..."
 cd "$APP_DIR"
 git add -A
 git commit -m "Add $FILENAME to $CATEGORY"
-git push
 
 echo ""
-echo "✅ Done! $FILENAME is live at:"
+echo "✅ Done! Asset staged and committed."
+echo "   Run 'git push' from $APP_DIR to deploy to:"
 echo "   https://shinobidarkaura.github.io/moongleam-viewer/"
