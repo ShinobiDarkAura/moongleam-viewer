@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moongleam — Character Viewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #ccc;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 12px 20px;
+      background: #111;
+      border-bottom: 1px solid #222;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #888;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+    }
+
+    label {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+    }
+
+    select {
+      background: #1a1a1a;
+      color: #ccc;
+      border: 1px solid #333;
+      padding: 5px 10px;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      outline: none;
+    }
+
+    select:focus { border-color: #555; }
+
+    .intensity-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 80px;
+      height: 3px;
+      background: #333;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #888;
+      cursor: pointer;
+    }
+
+    .zoom-wrap {
+      display: flex;
+      gap: 4px;
+    }
+
+    .zoom-wrap button {
+      background: #1a1a1a;
+      color: #888;
+      border: 1px solid #333;
+      width: 26px;
+      height: 26px;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.1s, border-color 0.1s;
+    }
+
+    .zoom-wrap button:hover { color: #ccc; border-color: #555; }
+    .zoom-wrap button:active { background: #222; }
+
+    .desat-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      cursor: pointer;
+      user-select: none;
+    }
+    .desat-wrap:hover { color: #888; }
+    .desat-wrap input[type=checkbox] {
+      accent-color: #888;
+      cursor: pointer;
+    }
+
+    .color-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      border: 1px solid #444;
+      flex-shrink: 0;
+    }
+
+    main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    aside {
+      width: 200px;
+      background: #0f0f0f;
+      border-right: 1px solid #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      flex: 1 1 auto;
+      padding: 7px 4px;
+      font-family: inherit;
+      font-size: 8px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #666;
+      background: #0f0f0f;
+      border: none;
+      cursor: pointer;
+      transition: color 0.1s, background 0.1s;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover { color: #aaa; background: #141414; }
+    .tab-btn.active { color: var(--active-color, #44ff88); background: #111; }
+
+    .tab-panel {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .tab-panel.active { display: block; }
+    .tab-panel::-webkit-scrollbar { width: 4px; }
+    .tab-panel::-webkit-scrollbar-track { background: #0f0f0f; }
+    .tab-panel::-webkit-scrollbar-thumb { background: #2a2a2a; }
+
+    .char-item {
+      padding: 9px 14px;
+      font-size: 11px;
+      color: #555;
+      cursor: pointer;
+      border-bottom: 1px solid #161616;
+      transition: color 0.1s, background 0.1s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .char-item { color: #777; }
+    .char-item:hover { background: #161616; color: #aaa; }
+    .char-item.active { color: var(--active-color, #44ff88); background: #141414; }
+
+    #viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      color: #444;
+      pointer-events: none;
+    }
+
+    #model-name {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #333;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Moongleam // Characters</h1>
+  <div class="controls">
+    <label>Filter</label>
+    <div class="color-swatch" id="swatch"></div>
+    <select id="colorPicker">
+      <option value="none">No Filter</option>
+      <option value="green" selected>Green</option>
+      <option value="cyan">Cyan</option>
+      <option value="orange">Orange</option>
+      <option value="pink">Pink</option>
+      <option value="purple">Purple</option>
+      <option value="red">Red</option>
+    </select>
+    <div class="intensity-wrap">
+      <label>Intensity</label>
+      <input type="range" id="intensity" min="0" max="100" value="100" />
+    </div>
+    <div class="intensity-wrap">
+      <label>Brightness</label>
+      <input type="range" id="brightness" min="20" max="300" value="253" />
+    </div>
+    <label class="desat-wrap">
+      <input type="checkbox" id="desaturate" checked />
+      Desaturate
+    </label>
+    <div class="zoom-wrap">
+      <button id="zoomOut">−</button>
+      <button id="zoomIn">+</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="tab-bar" id="tabBar"></div>
+    <div id="charList"></div>
+  </aside>
+  <div id="viewport">
+    <canvas id="canvas"></canvas>
+    <div id="loading">SELECT A CHARACTER</div>
+    <div id="model-name"></div>
+  </div>
+</main>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }     from 'three/addons/postprocessing/RenderPass.js';
+import { OutlinePass }    from 'three/addons/postprocessing/OutlinePass.js';
+import { ShaderPass }     from 'three/addons/postprocessing/ShaderPass.js';
+import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js';
+
+// ── Palette ──────────────────────────────────────────────────────────────────
+const PALETTE = {
+  none:   { hex: null,      color: null },
+  green:  { hex: '#44ff88', color: new THREE.Color(0x44ff88) },
+  cyan:   { hex: '#00ffe0', color: new THREE.Color(0x00ffe0) },
+  orange: { hex: '#ff8800', color: new THREE.Color(0xff8800) },
+  pink:   { hex: '#ff44cc', color: new THREE.Color(0xff44cc) },
+  purple: { hex: '#aa44ff', color: new THREE.Color(0xaa44ff) },
+  red:    { hex: '#ff3333', color: new THREE.Color(0xff3333) },
+};
+
+const GROUPS = [
+  { label: 'Characters', dir: 'models', files: [
+    'Neutral-Female.glb',
+    'Neutral-Male.glb',
+    'Maimed-Green-Female-Walking.glb',
+    'Maimed-Green-Male-Walking.glb',
+    'Maimed-Orange-Female-Walking.glb',
+    'Maimed-Orange-Male-Walking.glb',
+    'Maimed-Pink-Female-Walking.glb',
+    'Maimed-Pink-Male-Walking.glb',
+    'Maimed-Purple-Female-Walking.glb',
+    'Maimed-Purple-Male-Walking.glb',
+    'Maimed-Red-Female-Walking.glb',
+    'Maimed-Red-Male-Walking.glb',
+  ]},
+  { label: 'Items', dir: 'models/items', autoRotate: true, scale: 1.0, files: [
+    'item_battery_cell.glb',
+    'item_module_fragment.glb',
+    'item_module_kit.glb',
+    'item_weapon_fragment.glb',
+    'item_weapon_kit.glb',
+    'loot_crate.glb',
+    'module_fragment_option1.glb',
+    'weapon_fragment_option2.glb',
+  ]},
+  { label: 'Scraps', dir: 'models/scraps', autoRotate: true, scale: 1.0, files: [
+    'item_scrap.glb',
+    'scrap_option2.glb',
+    'hexagonal_tokens.glb',
+    'ingot_bars.glb',
+    'octagonal_chips.glb',
+    'threaded_slugs.glb',
+    'triangular_shards.glb',
+  ]},
+  { label: 'Enemies', dir: 'models/enemies', autoRotate: true, scale: 1.0, files: [
+    'basic_enemy_v2.glb',
+    'elite_enemy_v2.glb',
+    'maimed_enemy_v2.glb',
+  ]},
+  { label: 'Bosses', dir: 'models/bosses', autoRotate: true, scale: 1.0, files: [
+    'boss_spider_tank.glb',
+  ]},
+];
+
+// ── Renderer ─────────────────────────────────────────────────────────────────
+const canvas   = document.getElementById('canvas');
+const loadingEl = document.getElementById('loading');
+const nameTag  = document.getElementById('model-name');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0a);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+camera.position.set(0, 1.2, 3.5);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.25;
+controls.rotateSpeed = 1.8;
+controls.autoRotate = false;
+controls.autoRotateSpeed = 2.2;
+controls.target.set(0, 0.9, 0);
+controls.update();
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const key = new THREE.DirectionalLight(0xffffff, 1.2);
+key.position.set(2, 4, 3);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.camera.near = 0.5;
+key.shadow.camera.far = 20;
+key.shadow.camera.left = -3;
+key.shadow.camera.right = 3;
+key.shadow.camera.top = 3;
+key.shadow.camera.bottom = -3;
+key.shadow.bias = -0.001;
+key.shadow.radius = 4;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xaabbff, 0.4);
+fill.position.set(-2, 1, -1);
+scene.add(fill);
+
+// Shadow ground plane — invisible, just catches shadows
+const groundGeo = new THREE.PlaneGeometry(10, 10);
+const groundMat = new THREE.ShadowMaterial({ opacity: 0.45 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = 0;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ── Post-processing ──────────────────────────────────────────────────────────
+const composer   = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const outlinePass = new OutlinePass(new THREE.Vector2(800, 600), scene, camera);
+outlinePass.edgeStrength  = 4;
+outlinePass.edgeGlow      = 0;
+outlinePass.edgeThickness = 2;
+outlinePass.pulsePeriod   = 0;
+composer.addPass(outlinePass);
+
+composer.addPass(new ShaderPass(GammaCorrectionShader));
+
+const BrightnessShader = {
+  uniforms: { tDiffuse: { value: null }, brightness: { value: 2.53 } },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float brightness; varying vec2 vUv;
+    void main() { vec4 c = texture2D(tDiffuse, vUv); gl_FragColor = vec4(c.rgb * brightness, c.a); }`,
+};
+const brightnessPass = new ShaderPass(BrightnessShader);
+composer.addPass(brightnessPass);
+
+// ── Loaders ──────────────────────────────────────────────────────────────────
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+
+const loader = new GLTFLoader();
+loader.setDRACOLoader(dracoLoader);
+
+// ── State ────────────────────────────────────────────────────────────────────
+let currentModel    = null;
+let mixer           = null;
+const clock         = new THREE.Clock();
+let currentColorKey  = 'green';
+let currentIntensity = 1.0;
+let currentDesaturate = true;
+let meshList         = [];
+
+// ── Tint helpers ─────────────────────────────────────────────────────────────
+// Toon gradient map: 3 bands
+const gradData = new Uint8Array([0, 90, 160, 255]);
+const gradTex  = new THREE.DataTexture(gradData, 4, 1, THREE.RedFormat);
+gradTex.magFilter = THREE.NearestFilter;
+gradTex.minFilter = THREE.NearestFilter;
+gradTex.needsUpdate = true;
+
+function tintedColor(colorKey) {
+  // Lerp between neutral grey and full tint based on intensity
+  const grey = new THREE.Color(0x888888);
+  const full = PALETTE[colorKey].color;
+  return new THREE.Color().lerpColors(grey, full, currentIntensity);
+}
+
+function applyTint(colorKey) {
+  const p = PALETTE[colorKey];
+  const noFilter = colorKey === 'none';
+
+  outlinePass.enabled = !noFilter;
+  if (!noFilter) {
+    outlinePass.visibleEdgeColor.set(p.hex);
+    outlinePass.hiddenEdgeColor.set(p.hex);
+  }
+
+  meshList.forEach(mesh => {
+    const orig = mesh.userData.origMat;
+    if (!orig) return;
+
+    if (noFilter) {
+      mesh.material = orig;
+    } else {
+      const toon = new THREE.MeshToonMaterial({
+        map:         orig.map || null,
+        gradientMap: gradTex,
+        color:       tintedColor(colorKey),
+      });
+      if (currentDesaturate) {
+        toon.onBeforeCompile = (shader) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <map_fragment>',
+            `#ifdef USE_MAP
+              vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+              float lum = dot( sampledDiffuseColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
+              diffuseColor *= vec4( vec3( lum ), sampledDiffuseColor.a );
+            #endif`
+          );
+        };
+        toon.customProgramCacheKey = () => 'desat';
+      } else {
+        toon.customProgramCacheKey = () => 'normal';
+      }
+      mesh.material = toon;
+      toon.needsUpdate = true;
+    }
+  });
+
+  const sidebarColor = noFilter ? '#555' : p.hex;
+  document.documentElement.style.setProperty('--active-color', sidebarColor);
+  const swatch = document.getElementById('swatch');
+  swatch.style.background  = noFilter ? 'transparent' : p.hex;
+  swatch.style.borderColor = noFilter ? '#333' : p.hex;
+}
+
+// ── Load character ────────────────────────────────────────────────────────────
+function loadCharacter(filepath, autoRotate = false, modelScale = 2.0) {
+  loadingEl.textContent = 'LOADING…';
+  loadingEl.style.display = 'flex';
+
+  if (currentModel) { scene.remove(currentModel); currentModel = null; }
+  if (mixer)        { mixer.stopAllAction(); mixer = null; }
+  meshList = [];
+  outlinePass.selectedObjects = [];
+
+  const parts = filepath.split('/');
+  const url = parts.map(encodeURIComponent).join('/');
+
+  loader.load(url, (gltf) => {
+    const model = gltf.scene;
+    const wrap  = new THREE.Group();
+    wrap.add(model);
+    scene.add(wrap);
+    wrap.updateMatrixWorld(true);
+
+    // Auto-center + scale
+    const bb     = new THREE.Box3().setFromObject(wrap);
+    const size   = new THREE.Vector3(); bb.getSize(size);
+    const center = new THREE.Vector3(); bb.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const scale  = modelScale / Math.max(maxDim, 0.001);
+    wrap.scale.setScalar(scale);
+    wrap.position.set(-center.x * scale, -center.y * scale + (size.y * scale * 0.5), -center.z * scale);
+
+    // Pivot for clean rotation
+    const pivot = new THREE.Group();
+    scene.remove(wrap);
+    pivot.add(wrap);
+    scene.add(pivot);
+    currentModel = pivot;
+
+    // Collect meshes + stash original materials + enable shadows
+    model.traverse(node => {
+      if (!node.isMesh) return;
+      node.castShadow = true;
+      node.receiveShadow = true;
+      node.userData.origMat = node.material;
+      meshList.push(node);
+    });
+
+    // Snap ground plane to the bottom of the model
+    const scaledBb = new THREE.Box3().setFromObject(pivot);
+    ground.position.y = scaledBb.min.y;
+
+    outlinePass.selectedObjects = meshList;
+
+    // Animations
+    if (gltf.animations.length) {
+      mixer = new THREE.AnimationMixer(model);
+      mixer.clipAction(gltf.animations[0]).play();
+    }
+
+        // Re-center camera target on the model
+    const modelCenter = new THREE.Vector3();
+    new THREE.Box3().setFromObject(pivot).getCenter(modelCenter);
+    controls.target.copy(modelCenter);
+    controls.update();
+
+    controls.autoRotate = autoRotate;
+    applyTint(currentColorKey);
+
+    // Pre-compile shaders now to avoid first-frame stutter
+    renderer.compile(scene, camera);
+
+    loadingEl.style.display = 'none';
+    nameTag.textContent = filepath.split('/').pop().replace('.glb', '');
+
+  }, undefined, (err) => {
+    console.error('Load error:', err);
+    loadingEl.textContent = 'FAILED TO LOAD';
+  });
+}
+
+// ── Sidebar tabs ──────────────────────────────────────────────────────────────
+const tabBar = document.getElementById('tabBar');
+const listEl = document.getElementById('charList');
+
+function activateTab(idx) {
+  tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === idx));
+  const firstItem = listEl.querySelectorAll('.tab-panel')[idx].querySelector('.char-item');
+  if (firstItem) firstItem.click();
+}
+
+GROUPS.forEach((group, idx) => {
+  const btn = document.createElement('button');
+  btn.className = 'tab-btn';
+  btn.textContent = group.label;
+  btn.addEventListener('click', () => activateTab(idx));
+  tabBar.appendChild(btn);
+
+  const panel = document.createElement('div');
+  panel.className = 'tab-panel';
+
+  group.files.forEach(file => {
+    const filepath = `${group.dir}/${file}`;
+    const el = document.createElement('div');
+    el.className = 'char-item';
+    el.dataset.file = filepath;
+    el.dataset.autoRotate = group.autoRotate ? '1' : '';
+    el.dataset.scale = group.scale ?? 2.0;
+    el.textContent = file
+      .replace('.glb', '')
+      .replace(/[-_]/g, ' ')
+      .replace(/^item /i, '')
+      .replace(/\bmaimed\b/gi, '')
+      .replace(/\bwalking\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.char-item').forEach(i => i.classList.remove('active'));
+      el.classList.add('active');
+      loadCharacter(filepath, group.autoRotate ?? false, group.scale ?? 2.0);
+    });
+    panel.appendChild(el);
+  });
+
+  listEl.appendChild(panel);
+});
+
+// ── Default selection ────────────────────────────────────────────────────────
+// Activate tab 0 but override the first-item auto-select with our preferred default
+tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+
+const defaultItem = [...listEl.querySelectorAll('.char-item')]
+  .find(el => el.dataset.file === 'models/Maimed-Red-Female-Walking.glb');
+if (defaultItem) defaultItem.click();
+
+// ── Color picker ─────────────────────────────────────────────────────────────
+document.getElementById('colorPicker').addEventListener('change', e => {
+  currentColorKey = e.target.value;
+  applyTint(currentColorKey);
+});
+
+document.getElementById('intensity').addEventListener('input', e => {
+  currentIntensity = parseFloat(e.target.value) / 100;
+  applyTint(currentColorKey);
+});
+
+document.getElementById('desaturate').addEventListener('change', e => {
+  currentDesaturate = e.target.checked;
+  applyTint(currentColorKey);
+});
+
+document.getElementById('brightness').addEventListener('input', e => {
+  brightnessPass.uniforms.brightness.value = parseFloat(e.target.value) / 100;
+});
+
+const ZOOM_STEP = 0.15;
+document.getElementById('zoomIn').addEventListener('click', () => {
+  camera.position.lerp(controls.target, ZOOM_STEP);
+  controls.update();
+});
+document.getElementById('zoomOut').addEventListener('click', () => {
+  const dir = camera.position.clone().sub(controls.target).multiplyScalar(1 + ZOOM_STEP);
+  camera.position.copy(controls.target).add(dir);
+  controls.update();
+});
+
+// Init swatch
+applyTint(currentColorKey);
+
+// ── Resize ───────────────────────────────────────────────────────────────────
+function resize() {
+  const vp = document.getElementById('viewport');
+  const w = vp.clientWidth, h = vp.clientHeight;
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  outlinePass.resolution.set(w, h);
+}
+new ResizeObserver(resize).observe(document.getElementById('viewport'));
+resize();
+
+// ── Render loop ──────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  if (mixer) mixer.update(dt);
+  controls.update();
+  composer.render();
+}
+animate();
+</script>
+</body>
+</html>
