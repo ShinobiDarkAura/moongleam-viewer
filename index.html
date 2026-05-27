@@ -127,6 +127,26 @@
       cursor: pointer;
     }
 
+    .ps1-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      cursor: pointer;
+      user-select: none;
+      padding-left: 10px;
+      border-left: 1px solid #222;
+    }
+    .ps1-wrap:hover { color: #888; }
+    .ps1-wrap.active { color: #ff9944; }
+    .ps1-wrap input[type=checkbox] {
+      accent-color: #ff9944;
+      cursor: pointer;
+    }
+
     .color-swatch {
       width: 14px;
       height: 14px;
@@ -269,6 +289,10 @@
       <input type="checkbox" id="desaturate" checked />
       Desaturate
     </label>
+    <label class="ps1-wrap" id="ps1Wrap">
+      <input type="checkbox" id="ps1Toggle" />
+      PS1
+    </label>
     <div class="zoom-wrap">
       <button id="zoomOut">−</button>
       <button id="zoomIn">+</button>
@@ -360,6 +384,7 @@ const GROUPS = [
   ]},
   { label: 'Bosses', dir: 'models/bosses', autoRotate: true, scale: 1.0, files: [
     'boss_spider_tank.glb',
+    'Boss Male Red.glb',
   ]},
 ];
 
@@ -441,6 +466,49 @@ const BrightnessShader = {
 const brightnessPass = new ShaderPass(BrightnessShader);
 composer.addPass(brightnessPass);
 
+// PS1 — Pixelation pass (simulates 320×240 low-res render)
+const PixelShader = {
+  uniforms: {
+    tDiffuse:  { value: null },
+    resolution: { value: new THREE.Vector2(800, 600) },
+    pixelSize:  { value: 1.2 },
+  },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform vec2 resolution;
+    uniform float pixelSize;
+    varying vec2 vUv;
+    void main() {
+      vec2 dxy = pixelSize / resolution;
+      vec2 coord = dxy * floor(vUv / dxy);
+      gl_FragColor = texture2D(tDiffuse, coord);
+    }`,
+};
+const pixelPass = new ShaderPass(PixelShader);
+pixelPass.enabled = false;
+composer.addPass(pixelPass);
+
+// PS1 — Posterization pass (reduces to ~16-bit color depth)
+const PosterizeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    levels:   { value: 20.0 },
+  },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float levels;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      gl_FragColor = vec4(floor(c.rgb * levels + 0.5) / levels, c.a);
+    }`,
+};
+const posterizePass = new ShaderPass(PosterizeShader);
+posterizePass.enabled = false;
+composer.addPass(posterizePass);
+
 // ── Loaders ──────────────────────────────────────────────────────────────────
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
@@ -455,6 +523,7 @@ const clock         = new THREE.Clock();
 let currentColorKey  = 'green';
 let currentIntensity = 1.0;
 let currentDesaturate = true;
+let ps1Mode          = false;
 let meshList         = [];
 
 // ── Tint helpers ─────────────────────────────────────────────────────────────
@@ -476,6 +545,7 @@ function applyTint(colorKey) {
   const p = PALETTE[colorKey];
   const noFilter = colorKey === 'none';
 
+  // Outline whenever a color filter is active (toon or PS1)
   outlinePass.enabled = !noFilter;
   if (!noFilter) {
     outlinePass.visibleEdgeColor.set(p.hex);
@@ -486,9 +556,58 @@ function applyTint(colorKey) {
     const orig = mesh.userData.origMat;
     if (!orig) return;
 
-    if (noFilter) {
+    if (ps1Mode) {
+      // ── PS1 mode: flat-shaded Lambert + nearest-filter textures + vertex snap ──
+      const lambert = new THREE.MeshLambertMaterial({
+        flatShading: true,
+        map:   orig.map || null,
+        color: noFilter ? new THREE.Color(0xffffff) : tintedColor(colorKey),
+      });
+
+      if (lambert.map) {
+        // Store original filters once so we can restore them later
+        if (lambert.map.userData.origMagFilter === undefined) {
+          lambert.map.userData.origMagFilter = lambert.map.magFilter;
+          lambert.map.userData.origMinFilter  = lambert.map.minFilter;
+          lambert.map.userData.origMipmaps    = lambert.map.generateMipmaps;
+        }
+        lambert.map.magFilter      = THREE.NearestFilter;
+        lambert.map.minFilter      = THREE.NearestFilter;
+        lambert.map.generateMipmaps = false;
+        lambert.map.needsUpdate    = true;
+      }
+
+      // Vertex snapping — snap projected vertices to a coarse grid (PS1 jitter)
+      lambert.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <project_vertex>',
+          `#include <project_vertex>
+          float snapFactor = 96.0;
+          gl_Position.xy = floor(gl_Position.xy / gl_Position.w * snapFactor + 0.5) / snapFactor * gl_Position.w;`
+        );
+      };
+      lambert.customProgramCacheKey = () => noFilter ? 'ps1-nocolor' : 'ps1-color';
+
+      mesh.material = lambert;
+
+    } else if (noFilter) {
+      // ── No filter, no PS1: restore original material + texture filters ──
+      if (orig.map && orig.map.userData.origMagFilter !== undefined) {
+        orig.map.magFilter       = orig.map.userData.origMagFilter;
+        orig.map.minFilter       = orig.map.userData.origMinFilter;
+        orig.map.generateMipmaps = orig.map.userData.origMipmaps;
+        orig.map.needsUpdate     = true;
+      }
       mesh.material = orig;
+
     } else {
+      // ── Toon mode ──
+      if (orig.map && orig.map.userData.origMagFilter !== undefined) {
+        orig.map.magFilter       = orig.map.userData.origMagFilter;
+        orig.map.minFilter       = orig.map.userData.origMinFilter;
+        orig.map.generateMipmaps = orig.map.userData.origMipmaps;
+        orig.map.needsUpdate     = true;
+      }
       const toon = new THREE.MeshToonMaterial({
         map:         orig.map || null,
         gradientMap: gradTex,
@@ -671,6 +790,15 @@ document.getElementById('desaturate').addEventListener('change', e => {
   applyTint(currentColorKey);
 });
 
+document.getElementById('ps1Toggle').addEventListener('change', e => {
+  ps1Mode = e.target.checked;
+  pixelPass.enabled    = ps1Mode;
+  posterizePass.enabled = ps1Mode;
+  document.getElementById('ps1Wrap').classList.toggle('active', ps1Mode);
+  applyTint(currentColorKey);
+  if (currentModel) renderer.compile(scene, camera);
+});
+
 document.getElementById('brightness').addEventListener('input', e => {
   brightnessPass.uniforms.brightness.value = parseFloat(e.target.value) / 100;
 });
@@ -698,6 +826,8 @@ function resize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   outlinePass.resolution.set(w, h);
+  const pr = renderer.getPixelRatio();
+  pixelPass.uniforms.resolution.value.set(w * pr, h * pr);
 }
 new ResizeObserver(resize).observe(document.getElementById('viewport'));
 resize();
