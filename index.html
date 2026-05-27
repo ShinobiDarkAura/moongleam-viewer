@@ -387,6 +387,8 @@ const GROUPS = [
     'boss_spider_tank.glb',
     'Boss Male Red.glb',
   ]},
+  { label: 'V2 FRAMES', dir: 'models/v2_enemies', autoRotate: false, scale: 1.0, files: [
+  ]},
 ];
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
@@ -778,9 +780,9 @@ GROUPS.forEach((group, idx) => {
 });
 
 // ── Default selection ────────────────────────────────────────────────────────
-// Activate tab 0 but override the first-item auto-select with our preferred default
-tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
-listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+// Activate V2 FRAMES tab (index 5)
+tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 5));
+listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 5));
 
 const defaultItem = [...listEl.querySelectorAll('.char-item')]
   .find(el => el.dataset.file === 'models/Maimed-Red-Female-Walking.glb');
