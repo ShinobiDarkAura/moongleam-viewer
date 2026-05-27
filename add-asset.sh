@@ -11,6 +11,7 @@
 #   scraps      → models/scraps/
 #   enemies     → models/enemies/
 #   bosses      → models/bosses/
+#   v2_enemies  → models/v2_enemies/
 #
 # Examples:
 #   ./add-asset.sh ~/Downloads/new_character.glb characters
@@ -26,7 +27,7 @@ INDEX="$APP_DIR/index.html"
 # ── Args ──────────────────────────────────────────────────────────────────────
 if [[ $# -lt 2 ]]; then
   echo "Usage: $0 <path-to-glb> <category> [display-name]"
-  echo "Categories: characters, items, scraps, enemies, bosses"
+  echo "Categories: characters, items, scraps, enemies, bosses, v2_enemies"
   exit 1
 fi
 
@@ -46,9 +47,10 @@ case "$CATEGORY" in
   scraps)     DEST_DIR="$MODELS_DIR/scraps" ;   DIR_KEY="models/scraps" ;;
   enemies)    DEST_DIR="$MODELS_DIR/enemies" ;  DIR_KEY="models/enemies" ;;
   bosses)     DEST_DIR="$MODELS_DIR/bosses" ;   DIR_KEY="models/bosses" ;;
+  v2_enemies) DEST_DIR="$MODELS_DIR/v2_enemies" ; DIR_KEY="models/v2_enemies" ;;
   *)
     echo "❌ Unknown category: $CATEGORY"
-    echo "   Valid: characters, items, scraps, enemies, bosses"
+    echo "   Valid: characters, items, scraps, enemies, bosses, v2_enemies"
     exit 1
     ;;
 esac
