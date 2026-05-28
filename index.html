@@ -478,6 +478,8 @@ const GROUPS = [
       'enemies/Maimed Female 2.glb',
       'enemies/Maimed Male 3.glb',
       'enemies/Maimed Female 3.glb',
+      'bosses/Boss Male 1.glb',
+      'bosses/Boss Male 2.glb',
     ], labels: [
       'Boss Male 1',
       'Boss Female 1',
@@ -485,6 +487,8 @@ const GROUPS = [
       'Boss Female 2',
       'Boss Male 3',
       'Boss Female 3',
+      'Boss Male 4',
+      'Boss Male 5',
     ]},
     { heading: 'Elite', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'enemies/Elite Male 1.glb',
@@ -501,10 +505,6 @@ const GROUPS = [
       'enemies/Base Female 2.glb',
       'enemies/Base Male 3.glb',
       'enemies/Base Female 3.glb',
-    ]},
-    { heading: 'Boss', dir: 'models', scale: 1.63, autoRotate: false, files: [
-      'bosses/Boss Male 1.glb',
-      'bosses/Boss Male 2.glb',
     ]},
   ]},
 ];
@@ -1043,7 +1043,7 @@ function applyTint(colorKey) {
     scene.background = new THREE.Color(0x0a0a0a);
     renderer.setClearColor(0x0a0a0a, 1);
   } else {
-    const tinted = p.color.clone().multiplyScalar(0.014);
+    const tinted = p.color.clone().multiplyScalar(0.008);
     scene.background = tinted;
     renderer.setClearColor(tinted, 1);
   }
