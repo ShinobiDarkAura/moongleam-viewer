@@ -413,13 +413,6 @@ const GROUPS = [
       'Maimed-Green-Male-Walking.glb',
       'Maimed-Orange-Female-Walking.glb',
       'Maimed-Orange-Male-Walking.glb',
-    ], labels: [
-      'Boss Female 1',
-      'Boss Male 1',
-      'Boss Female 2',
-      'Boss Male 2',
-      'Boss Female 3',
-      'Boss Male 3',
     ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Maimed-Pink-Female-Walking.glb',
@@ -428,6 +421,13 @@ const GROUPS = [
       'Maimed-Purple-Male-Walking.glb',
       'Maimed-Red-Female-Walking.glb',
       'Maimed-Red-Male-Walking.glb',
+    ], labels: [
+      'Boss Female 1',
+      'Boss Male 1',
+      'Boss Female 2',
+      'Boss Male 2',
+      'Boss Female 3',
+      'Boss Male 3',
     ]},
     { heading: 'Base Characters', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Base Female Orange V2.glb',
@@ -694,7 +694,6 @@ const HoloShader = {
 };
 const holoPass = new ShaderPass(HoloShader);
 holoPass.enabled = false;
-composer.addPass(holoPass);
 
 // ── Status Effect pass ───────────────────────────────────────────────────────
 const StatusShader = {
@@ -869,7 +868,9 @@ const StatusShader = {
 };
 const statusPass = new ShaderPass(StatusShader);
 statusPass.enabled = false;
-composer.addPass(statusPass);
+
+// ── Insert holo + status into composer RIGHT AFTER outline (bg is still ~#0a0a0a here) ──
+composer.passes.splice(2, 0, holoPass, statusPass);
 
 // Status metadata: label, outline colour, base tint for color filter
 const STATUS_META = [
