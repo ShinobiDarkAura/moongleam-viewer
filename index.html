@@ -406,7 +406,7 @@ const PALETTE = {
 
 const GROUPS = [
   { label: 'Round 1', sections: [
-    { heading: 'Elite', dir: 'models', scale: 2.04, autoRotate: false, files: [
+    { heading: 'Elite', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Neutral-Female.glb',
       'Neutral-Male.glb',
       'Green Female.glb',
@@ -414,7 +414,7 @@ const GROUPS = [
       'Maimed-Orange-Female-Walking.glb',
       'Maimed-Orange-Male-Walking.glb',
     ]},
-    { heading: 'Bosses', dir: 'models', scale: 2.04, autoRotate: false, files: [
+    { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Maimed-Pink-Female-Walking.glb',
       'Maimed-Pink-Male-Walking.glb',
       'Maimed-Purple-Female-Walking.glb',
@@ -422,7 +422,7 @@ const GROUPS = [
       'Maimed-Red-Female-Walking.glb',
       'Maimed-Red-Male-Walking.glb',
     ]},
-    { heading: 'Base Characters', dir: 'models', scale: 2.04, autoRotate: false, files: [
+    { heading: 'Base Characters', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Base Female Orange V2.glb',
       'Tactical Female Black.glb',
     ]},
@@ -471,29 +471,29 @@ const GROUPS = [
     ]},
   ]},
   { label: 'Round 2', sections: [
-    { heading: 'Maimed', dir: 'models', scale: 2.04, autoRotate: false, files: [
-      'enemies/maimed_enemy_variant_1_walking.glb',
-      'enemies/maimed_enemy_variant_2_walking.glb',
-      'enemies/maimed_enemy_variant_3_walking.glb',
-      'enemies/maimed_enemy_variant_4_walking.glb',
-      'enemies/maimed_enemy_variant_5_walking.glb',
-      'enemies/maimed_enemy_variant_6_walking.glb',
+    { heading: 'Maimed', dir: 'models', scale: 1.63, autoRotate: false, files: [
+      'enemies/Maimed Male 1.glb',
+      'enemies/Maimed Female 1.glb',
+      'enemies/Maimed Male 2.glb',
+      'enemies/Maimed Female 2.glb',
+      'enemies/Maimed Male 3.glb',
+      'enemies/Maimed Female 3.glb',
     ]},
-    { heading: 'Elite', dir: 'models', scale: 2.04, autoRotate: false, files: [
-      'enemies/elite_enemy_variant_1_walking.glb',
-      'enemies/elite_enemy_variant_2_walking.glb',
-      'enemies/elite_enemy_variant_3_walking.glb',
-      'enemies/elite_enemy_variant_4_walking.glb',
-      'enemies/elite_enemy_variant_5_walking.glb',
-      'enemies/elite_enemy_variant_6_walking.glb',
+    { heading: 'Elite', dir: 'models', scale: 1.63, autoRotate: false, files: [
+      'enemies/Elite Male 1.glb',
+      'enemies/Elite Female 1.glb',
+      'enemies/Elite Male 2.glb',
+      'enemies/Elite Female 2.glb',
+      'enemies/Elite Male 3.glb',
+      'enemies/Elite Female 3.glb',
     ]},
-    { heading: 'Medic', dir: 'models', scale: 2.04, autoRotate: false, files: [
-      'enemies/medic_variant_1_walking.glb',
-      'enemies/medic_variant_2_walking.glb',
-      'enemies/medic_variant_3_walking.glb',
-      'enemies/medic_variant_4_walking.glb',
-      'enemies/medic_variant_5_walking.glb',
-      'enemies/medic_variant_6_walking.glb',
+    { heading: 'BASE', dir: 'models', scale: 1.63, autoRotate: false, files: [
+      'enemies/Base Male 1.glb',
+      'enemies/Base Female 1.glb',
+      'enemies/Base Male 2.glb',
+      'enemies/Base Female 2.glb',
+      'enemies/Base Male 3.glb',
+      'enemies/Base Female 3.glb',
     ]},
   ]},
 ];
@@ -619,14 +619,9 @@ const posterizePass = new ShaderPass(PosterizeShader);
 posterizePass.enabled = true;
 composer.addPass(posterizePass);
 
-// ── Character silhouette mask render target ──────────────────────────────────
-const maskTarget = new THREE.WebGLRenderTarget(800, 600, {
-  minFilter: THREE.LinearFilter,
-  magFilter: THREE.LinearFilter,
-  format: THREE.RGBAFormat,
-});
-// Render all meshes white, background black → red channel = character mask
-const maskOverrideMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+// Background colour as vec3 for mask detection in shaders
+// mask = how much a pixel differs from the scene bg (#0a0a0a)
+// Used by holo + status shaders to confine effects to the character
 
 // ── Hologram pass ────────────────────────────────────────────────────────────
 const HoloShader = {
