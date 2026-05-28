@@ -659,17 +659,22 @@ const HoloShader = {
     float hash(float n){ return fract(sin(n)*43758.5453); }
 
     void main(){
+      vec4 baseRaw = texture2D(tDiffuse, vUv);
+      // Sample a corner pixel as the true background reference
+      vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
+      float mask = smoothstep(0.04, 0.14, length(baseRaw.rgb - bgCol));
+
       // ── Horizontal glitch bands ──
       float bandRow  = floor(vUv.y * 80.0);
       float bandTime = floor(time * 12.0);
       float trigger  = hash(bandRow * 127.1 + bandTime * 311.7);
-      float isGlitch = step(0.80, trigger);
+      float isGlitch = step(0.80, trigger) * mask;
       float glitchAmt = (hash(bandRow * 92.3 + bandTime * 17.0) - 0.5) * 0.18 * isGlitch;
 
       // ── Large tear / full-row displacement ──
       float tearRow  = floor(vUv.y * 20.0);
       float tearTime = floor(time * 5.0);
-      float tearTrig = step(0.92, hash(tearRow * 53.1 + tearTime * 79.3));
+      float tearTrig = step(0.92, hash(tearRow * 53.1 + tearTime * 79.3)) * mask;
       float tearAmt  = (hash(tearRow + tearTime) - 0.5) * 0.28 * tearTrig;
 
       // ── Chromatic aberration on glitch ──
@@ -702,9 +707,17 @@ const HoloShader = {
       float bigFlicker = step(0.94, hash(floor(time * 6.0))) * 0.5; // occasional full dim
       holo *= flicker * (1.0 - bigFlicker);
 
-      // ── Translucency (full screen — bg goes holo too) ──
+      // ── Edge glow (bright rim on character silhouette) ──
+      float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.8;
+      holo += holoColor * edgeGlow;
+
+      // ── Translucency ──
+      vec3 bg = vec3(0.039, 0.039, 0.039);
       float opacity = clamp(lum * 0.55 + 0.10, 0.0, 0.68);
-      vec3 col = mix(vec3(0.0), holo, opacity);
+      vec3 holoBlended = mix(bg, holo, opacity);
+
+      // Apply holo only where mask says character; leave bg pixels as-is
+      vec3 col = mix(base.rgb, holoBlended, mask);
 
       gl_FragColor = vec4(col, 1.0);
     }
@@ -888,8 +901,7 @@ const statusPass = new ShaderPass(StatusShader);
 statusPass.enabled = false;
 
 // ── Insert holo + status into composer RIGHT AFTER outline (bg is still ~#0a0a0a here) ──
-composer.addPass(holoPass);
-composer.addPass(statusPass);
+composer.passes.splice(2, 0, holoPass, statusPass);
 
 // Status metadata: label, outline colour, base tint for color filter
 const STATUS_META = [
