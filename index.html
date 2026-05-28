@@ -147,6 +147,26 @@
       cursor: pointer;
     }
 
+    .holo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      cursor: pointer;
+      user-select: none;
+      padding-left: 10px;
+      border-left: 1px solid #222;
+    }
+    .holo-wrap:hover { color: #888; }
+    .holo-wrap.active { color: #44ddff; }
+    .holo-wrap input[type=checkbox] {
+      accent-color: #44ddff;
+      cursor: pointer;
+    }
+
     .color-swatch {
       width: 14px;
       height: 14px;
@@ -233,6 +253,16 @@
     .char-item:hover { background: #161616; color: #aaa; }
     .char-item.active { color: var(--active-color, #44ff88); background: #141414; }
 
+    .section-head {
+      padding: 10px 14px 4px;
+      font-size: 8px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #3a3a3a;
+      margin-top: 2px;
+    }
+    .section-head:first-child { margin-top: 0; }
+
     #viewport {
       flex: 1;
       position: relative;
@@ -301,6 +331,10 @@
     <label class="ps1-wrap" id="ps1Wrap">
       <input type="checkbox" id="ps1Toggle" />
       PS1
+    </label>
+    <label class="holo-wrap" id="holoWrap">
+      <input type="checkbox" id="holoToggle" />
+      Holo
     </label>
     <div class="intensity-wrap" style="padding-left:10px;border-left:1px solid #222;">
       <label>Status</label>
@@ -371,78 +405,97 @@ const PALETTE = {
 };
 
 const GROUPS = [
-  { label: 'Round 1', dir: 'models', autoRotate: false, scale: 1.0, files: [
-    // Characters
-    'Neutral-Female.glb',
-    'Neutral-Male.glb',
-    'Green Female.glb',
-    'Maimed-Green-Male-Walking.glb',
-    'Maimed-Orange-Female-Walking.glb',
-    'Maimed-Orange-Male-Walking.glb',
-    'Maimed-Pink-Female-Walking.glb',
-    'Maimed-Pink-Male-Walking.glb',
-    'Maimed-Purple-Female-Walking.glb',
-    'Maimed-Purple-Male-Walking.glb',
-    'Maimed-Red-Female-Walking.glb',
-    'Maimed-Red-Male-Walking.glb',
-    'Base Female Orange V2.glb',
-    'Tactical Female Black.glb',
-    // Enemies
-    'enemies/basic_enemy_v2.glb',
-    'enemies/elite_enemy_v2.glb',
-    'enemies/maimed_enemy_v2.glb',
-    // Bosses
-    'bosses/boss_spider_tank.glb',
-    'bosses/Boss Male Red.glb',
-    // V2 Frames
-    'v2_enemies/Skull Punk Female.glb',
-    'v2_enemies/Hooded Knight Blue.glb',
-    'v2_enemies/Wasteland Scavenger.glb',
-    'v2_enemies/Gas Mask Operative.glb',
-    'v2_enemies/Cable Tech Male.glb',
-    'v2_enemies/Green Mech Unit.glb',
-    'v2_enemies/Cyborg Enforcer Orange.glb',
-    'v2_enemies/Pink Cyborg Warrior.glb',
-    'v2_enemies/Pink Dino Mech.glb',
-    // Items
-    'items/item_battery_cell.glb',
-    'items/item_module_fragment.glb',
-    'items/item_module_kit.glb',
-    'items/item_weapon_fragment.glb',
-    'items/item_weapon_kit.glb',
-    'items/loot_crate.glb',
-    'items/module_fragment_option1.glb',
-    'items/weapon_fragment_option2.glb',
-    'items/Energy Canister.glb',
-    'items/Health Chip.glb',
-    'items/Purple Processor.glb',
-    'items/Purple Crystal.glb',
-    // Scraps
-    'scraps/item_scrap.glb',
-    'scraps/scrap_option2.glb',
-    'scraps/hexagonal_tokens.glb',
-    'scraps/ingot_bars.glb',
-    'scraps/octagonal_chips.glb',
-    'scraps/threaded_slugs.glb',
-    'scraps/triangular_shards.glb',
+  { label: 'Round 1', sections: [
+    { heading: 'Elite', dir: 'models', scale: 2.04, autoRotate: false, files: [
+      'Neutral-Female.glb',
+      'Neutral-Male.glb',
+      'Green Female.glb',
+      'Maimed-Green-Male-Walking.glb',
+      'Maimed-Orange-Female-Walking.glb',
+      'Maimed-Orange-Male-Walking.glb',
+    ]},
+    { heading: 'Bosses', dir: 'models', scale: 2.04, autoRotate: false, files: [
+      'Maimed-Pink-Female-Walking.glb',
+      'Maimed-Pink-Male-Walking.glb',
+      'Maimed-Purple-Female-Walking.glb',
+      'Maimed-Purple-Male-Walking.glb',
+      'Maimed-Red-Female-Walking.glb',
+      'Maimed-Red-Male-Walking.glb',
+    ]},
+    { heading: 'Base Characters', dir: 'models', scale: 2.04, autoRotate: false, files: [
+      'Base Female Orange V2.glb',
+      'Tactical Female Black.glb',
+    ]},
+    { heading: 'Enemies', dir: 'models', scale: 1.5, autoRotate: false, files: [
+      'enemies/basic_enemy_v2.glb',
+      'enemies/elite_enemy_v2.glb',
+      'enemies/maimed_enemy_v2.glb',
+    ]},
+    { heading: 'Boss Units', dir: 'models', scale: 1.0, autoRotate: false, files: [
+      'bosses/boss_spider_tank.glb',
+      'bosses/Boss Male Red.glb',
+    ]},
+    { heading: 'V2 Frames', dir: 'models', scale: 1.5, autoRotate: false, files: [
+      'v2_enemies/Skull Punk Female.glb',
+      'v2_enemies/Hooded Knight Blue.glb',
+      'v2_enemies/Wasteland Scavenger.glb',
+      'v2_enemies/Gas Mask Operative.glb',
+      'v2_enemies/Cable Tech Male.glb',
+      'v2_enemies/Green Mech Unit.glb',
+      'v2_enemies/Cyborg Enforcer Orange.glb',
+      'v2_enemies/Pink Cyborg Warrior.glb',
+      'v2_enemies/Pink Dino Mech.glb',
+    ]},
+    { heading: 'Items', dir: 'models', scale: 1.0, autoRotate: false, files: [
+      'items/item_battery_cell.glb',
+      'items/item_module_fragment.glb',
+      'items/item_module_kit.glb',
+      'items/item_weapon_fragment.glb',
+      'items/item_weapon_kit.glb',
+      'items/loot_crate.glb',
+      'items/module_fragment_option1.glb',
+      'items/weapon_fragment_option2.glb',
+      'items/Energy Canister.glb',
+      'items/Health Chip.glb',
+      'items/Purple Processor.glb',
+      'items/Purple Crystal.glb',
+    ]},
+    { heading: 'Scraps', dir: 'models', scale: 1.0, autoRotate: false, files: [
+      'scraps/item_scrap.glb',
+      'scraps/scrap_option2.glb',
+      'scraps/hexagonal_tokens.glb',
+      'scraps/ingot_bars.glb',
+      'scraps/octagonal_chips.glb',
+      'scraps/threaded_slugs.glb',
+      'scraps/triangular_shards.glb',
+    ]},
   ]},
-  { label: 'Round 2', dir: 'models', autoRotate: false, scale: 1.0, files: [
-    'enemies/maimed_enemy_variant_1_walking.glb',
-    'enemies/maimed_enemy_variant_2_walking.glb',
-    'enemies/maimed_enemy_variant_3_walking.glb',
-    'enemies/maimed_enemy_variant_4_walking.glb',
-    'enemies/maimed_enemy_variant_5_walking.glb',
-    'enemies/maimed_enemy_variant_6_walking.glb',
-    'enemies/elite_enemy_variant_1_walking.glb',
-    'enemies/elite_enemy_variant_2_walking.glb',
-    'enemies/elite_enemy_variant_3_walking.glb',
-    'enemies/elite_enemy_variant_4_walking.glb',
-    'enemies/elite_enemy_variant_5_walking.glb',
-    'enemies/elite_enemy_variant_6_walking.glb',
-    'enemies/medic_variant_1_walking.glb',
-    'enemies/medic_variant_2_walking.glb',
-    'enemies/medic_variant_3_walking.glb',
-  ] },
+  { label: 'Round 2', sections: [
+    { heading: 'Maimed', dir: 'models', scale: 2.04, autoRotate: false, files: [
+      'enemies/maimed_enemy_variant_1_walking.glb',
+      'enemies/maimed_enemy_variant_2_walking.glb',
+      'enemies/maimed_enemy_variant_3_walking.glb',
+      'enemies/maimed_enemy_variant_4_walking.glb',
+      'enemies/maimed_enemy_variant_5_walking.glb',
+      'enemies/maimed_enemy_variant_6_walking.glb',
+    ]},
+    { heading: 'Elite', dir: 'models', scale: 2.04, autoRotate: false, files: [
+      'enemies/elite_enemy_variant_1_walking.glb',
+      'enemies/elite_enemy_variant_2_walking.glb',
+      'enemies/elite_enemy_variant_3_walking.glb',
+      'enemies/elite_enemy_variant_4_walking.glb',
+      'enemies/elite_enemy_variant_5_walking.glb',
+      'enemies/elite_enemy_variant_6_walking.glb',
+    ]},
+    { heading: 'Medic', dir: 'models', scale: 2.04, autoRotate: false, files: [
+      'enemies/medic_variant_1_walking.glb',
+      'enemies/medic_variant_2_walking.glb',
+      'enemies/medic_variant_3_walking.glb',
+      'enemies/medic_variant_4_walking.glb',
+      'enemies/medic_variant_5_walking.glb',
+      'enemies/medic_variant_6_walking.glb',
+    ]},
+  ]},
 ];
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
@@ -543,7 +596,7 @@ const PixelShader = {
     }`,
 };
 const pixelPass = new ShaderPass(PixelShader);
-pixelPass.enabled = false;
+pixelPass.enabled = true;
 composer.addPass(pixelPass);
 
 // PS1 — Posterization pass (reduces to ~16-bit color depth)
@@ -563,7 +616,7 @@ const PosterizeShader = {
     }`,
 };
 const posterizePass = new ShaderPass(PosterizeShader);
-posterizePass.enabled = false;
+posterizePass.enabled = true;
 composer.addPass(posterizePass);
 
 // ── Character silhouette mask render target ──────────────────────────────────
@@ -574,6 +627,74 @@ const maskTarget = new THREE.WebGLRenderTarget(800, 600, {
 });
 // Render all meshes white, background black → red channel = character mask
 const maskOverrideMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+// ── Hologram pass ────────────────────────────────────────────────────────────
+const HoloShader = {
+  uniforms: {
+    tDiffuse:  { value: null },
+    maskTex:   { value: maskTarget.texture },
+    time:      { value: 0.0 },
+    holoColor: { value: new THREE.Color(0x44ff88) },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform sampler2D maskTex;
+    uniform float time;
+    uniform vec3 holoColor;
+    varying vec2 vUv;
+
+    float hash(float n){ return fract(sin(n)*43758.5453); }
+
+    void main(){
+      float mask = texture2D(maskTex, vUv).r; // 1 = character, 0 = background
+
+      // ── Horizontal glitch bands (only shift character pixels) ──
+      float bandRow  = floor(vUv.y * 80.0);
+      float bandTime = floor(time * 7.0);
+      float trigger  = hash(bandRow * 127.1 + bandTime * 311.7);
+      float isGlitch = step(0.93, trigger) * mask;
+      float glitchAmt = (hash(bandRow * 92.3 + bandTime * 17.0) - 0.5) * 0.07 * isGlitch;
+
+      float tearRow  = floor(vUv.y * 20.0);
+      float tearTime = floor(time * 3.0);
+      float tearTrig = step(0.97, hash(tearRow * 53.1 + tearTime * 79.3)) * mask;
+      float tearAmt  = (hash(tearRow + tearTime) - 0.5) * 0.12 * tearTrig;
+
+      vec2 uv = vec2(vUv.x + glitchAmt + tearAmt, vUv.y);
+      vec4 base = texture2D(tDiffuse, uv);
+      float lum = dot(base.rgb, vec3(0.299, 0.587, 0.114));
+
+      // ── Hologram colour (driven by active filter) ──
+      vec3 holo = holoColor * (lum * 1.5 + 0.06);
+
+      // ── Scan lines ──
+      float scan = 0.78 + 0.22 * sin(vUv.y * 220.0 + time * 3.0);
+      holo *= scan;
+
+      // ── Rolling brightness wave ──
+      float roll = 0.88 + 0.12 * sin(vUv.y * 5.0 - time * 1.4);
+      holo *= roll;
+
+      // ── Flicker ──
+      float flicker = 0.92 + 0.08 * hash(floor(time * 24.0));
+      holo *= flicker;
+
+      // ── Translucency: character pixels blend against bg, background untouched ──
+      vec3 bg = vec3(0.039, 0.039, 0.039); // scene background #0a0a0a
+      float opacity = clamp(lum * 0.65 + 0.12, 0.0, 0.72); // never fully opaque
+      vec3 holoBlended = mix(bg, holo, opacity);
+
+      // Apply holo only where mask says character; leave bg pixels as-is
+      vec3 col = mix(base.rgb, holoBlended, mask);
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+const holoPass = new ShaderPass(HoloShader);
+holoPass.enabled = false;
+composer.addPass(holoPass);
 
 // ── Status Effect pass ───────────────────────────────────────────────────────
 const StatusShader = {
@@ -779,7 +900,7 @@ const clock         = new THREE.Clock();
 let currentColorKey  = 'green';
 let currentIntensity = 1.0;
 let currentDesaturate = true;
-let ps1Mode          = false;
+let ps1Mode          = true;
 let currentStatus    = 0;
 let meshList         = [];
 
@@ -1007,46 +1128,53 @@ GROUPS.forEach((group, idx) => {
   const panel = document.createElement('div');
   panel.className = 'tab-panel';
 
-  group.files.forEach(file => {
-    const filepath = `${group.dir}/${file}`;
-    const el = document.createElement('div');
-    el.className = 'char-item';
-    el.dataset.file = filepath;
-    el.dataset.autoRotate = group.autoRotate ? '1' : '';
-    el.dataset.scale = group.scale ?? 2.0;
-    el.textContent = file
-      .replace(/^.*\//, '')
-      .replace('.glb', '')
-      .replace(/[-_]/g, ' ')
-      .replace(/^item /i, '')
-      .replace(/\bmaimed\b/gi, '')
-      .replace(/\bwalking\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    el.addEventListener('click', () => {
-      document.querySelectorAll('.char-item').forEach(i => i.classList.remove('active'));
-      el.classList.add('active');
-      loadCharacter(filepath, group.autoRotate ?? false, group.scale ?? 2.0);
+  group.sections.forEach(section => {
+    // Section heading
+    const head = document.createElement('div');
+    head.className = 'section-head';
+    head.textContent = section.heading;
+    panel.appendChild(head);
+
+    section.files.forEach(file => {
+      const filepath = `${section.dir}/${file}`;
+      const el = document.createElement('div');
+      el.className = 'char-item';
+      el.dataset.file = filepath;
+      el.dataset.autoRotate = section.autoRotate ? '1' : '';
+      el.dataset.scale = section.scale ?? 2.0;
+      el.textContent = file
+        .replace(/^.*\//, '')
+        .replace('.glb', '')
+        .replace(/[-_]/g, ' ')
+        .replace(/^item /i, '')
+        .replace(/\bmaimed\b/gi, '')
+        .replace(/\bwalking\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      el.addEventListener('click', () => {
+        document.querySelectorAll('.char-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+        loadCharacter(filepath, section.autoRotate ?? false, section.scale ?? 2.0);
+      });
+      panel.appendChild(el);
     });
-    panel.appendChild(el);
   });
 
   listEl.appendChild(panel);
 });
 
-// ── Default selection ────────────────────────────────────────────────────────
-// Activate V2 FRAMES tab (index 5)
-tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 5));
-listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 5));
-
-const defaultItem = [...listEl.querySelectorAll('.char-item')]
-  .find(el => el.dataset.file === 'models/Maimed-Red-Female-Walking.glb');
+// ── Default selection: Round 2 tab, first item ────────────────────────────────
+tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 1));
+listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 1));
+const defaultItem = listEl.querySelectorAll('.tab-panel')[1].querySelector('.char-item');
 if (defaultItem) defaultItem.click();
 
 // ── Color picker ─────────────────────────────────────────────────────────────
 document.getElementById('colorPicker').addEventListener('change', e => {
   currentColorKey = e.target.value;
   applyTint(currentColorKey);
+  const p = PALETTE[currentColorKey];
+  if (p.color) holoPass.uniforms.holoColor.value.copy(p.color);
 });
 
 document.getElementById('intensity').addEventListener('input', e => {
@@ -1061,11 +1189,16 @@ document.getElementById('desaturate').addEventListener('change', e => {
 
 document.getElementById('ps1Toggle').addEventListener('change', e => {
   ps1Mode = e.target.checked;
-  pixelPass.enabled    = ps1Mode;
+  pixelPass.enabled     = ps1Mode;
   posterizePass.enabled = ps1Mode;
   document.getElementById('ps1Wrap').classList.toggle('active', ps1Mode);
   applyTint(currentColorKey);
   if (currentModel) renderer.compile(scene, camera);
+});
+
+document.getElementById('holoToggle').addEventListener('change', e => {
+  holoPass.enabled = e.target.checked;
+  document.getElementById('holoWrap').classList.toggle('active', e.target.checked);
 });
 
 document.getElementById('statusPicker').addEventListener('change', e => {
@@ -1074,11 +1207,12 @@ document.getElementById('statusPicker').addEventListener('change', e => {
   statusPass.enabled = currentStatus > 0;
 
   if (currentStatus > 0) {
-    // Drive the outline + tint from the status colour
     const meta = STATUS_META[currentStatus];
     currentColorKey = meta.color;
     document.getElementById('colorPicker').value = meta.color;
     applyTint(meta.color);
+    const p = PALETTE[meta.color];
+    if (p.color) holoPass.uniforms.holoColor.value.copy(p.color);
   }
 });
 
@@ -1097,7 +1231,9 @@ document.getElementById('zoomOut').addEventListener('click', () => {
   controls.update();
 });
 
-// Init swatch
+// Init swatch + PS1 default state
+document.getElementById('ps1Toggle').checked = true;
+document.getElementById('ps1Wrap').classList.add('active');
 applyTint(currentColorKey);
 
 // ── Resize ───────────────────────────────────────────────────────────────────
@@ -1123,8 +1259,25 @@ function animate() {
   if (mixer) mixer.update(dt);
   controls.update();
 
-  if (currentStatus > 0) {
-    statusPass.uniforms.time.value = clock.getElapsedTime();
+  const elapsed = clock.getElapsedTime();
+  if (holoPass.enabled)  holoPass.uniforms.time.value   = elapsed;
+  if (currentStatus > 0) statusPass.uniforms.time.value = elapsed;
+
+  // Render silhouette mask whenever holo or status effects need it
+  if ((holoPass.enabled || currentStatus > 0) && currentModel) {
+    const savedBg = scene.background;
+    scene.background = null;
+    ground.visible = false;
+    renderer.overrideMaterial = maskOverrideMat;
+    renderer.setClearColor(0x000000, 1);
+    renderer.setRenderTarget(maskTarget);
+    renderer.clear();
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.overrideMaterial = null;
+    renderer.setClearColor(0x0a0a0a, 1);
+    ground.visible = true;
+    scene.background = savedBg;
   }
 
   composer.render();
