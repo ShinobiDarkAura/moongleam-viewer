@@ -656,40 +656,56 @@ const HoloShader = {
       vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
       float mask = smoothstep(0.04, 0.14, length(baseRaw.rgb - bgCol));
 
-      // ── Horizontal glitch bands (only shift character pixels) ──
+      // ── Horizontal glitch bands ──
       float bandRow  = floor(vUv.y * 80.0);
-      float bandTime = floor(time * 7.0);
+      float bandTime = floor(time * 12.0);
       float trigger  = hash(bandRow * 127.1 + bandTime * 311.7);
-      float isGlitch = step(0.93, trigger) * mask;
-      float glitchAmt = (hash(bandRow * 92.3 + bandTime * 17.0) - 0.5) * 0.07 * isGlitch;
+      float isGlitch = step(0.80, trigger) * mask;
+      float glitchAmt = (hash(bandRow * 92.3 + bandTime * 17.0) - 0.5) * 0.18 * isGlitch;
 
+      // ── Large tear / full-row displacement ──
       float tearRow  = floor(vUv.y * 20.0);
-      float tearTime = floor(time * 3.0);
-      float tearTrig = step(0.97, hash(tearRow * 53.1 + tearTime * 79.3)) * mask;
-      float tearAmt  = (hash(tearRow + tearTime) - 0.5) * 0.12 * tearTrig;
+      float tearTime = floor(time * 5.0);
+      float tearTrig = step(0.92, hash(tearRow * 53.1 + tearTime * 79.3)) * mask;
+      float tearAmt  = (hash(tearRow + tearTime) - 0.5) * 0.28 * tearTrig;
 
+      // ── Chromatic aberration on glitch ──
+      float aberr = (glitchAmt + tearAmt) * 0.4;
       vec2 uv = vec2(vUv.x + glitchAmt + tearAmt, vUv.y);
-      vec4 base = texture2D(tDiffuse, uv); // glitch-shifted sample
-      float lum = dot(base.rgb, vec3(0.299, 0.587, 0.114));
+      float lumR = dot(texture2D(tDiffuse, uv + vec2( aberr, 0.0)).rgb, vec3(0.299,0.587,0.114));
+      float lumG = dot(texture2D(tDiffuse, uv).rgb,                      vec3(0.299,0.587,0.114));
+      float lumB = dot(texture2D(tDiffuse, uv - vec2( aberr, 0.0)).rgb, vec3(0.299,0.587,0.114));
+      vec4 base = texture2D(tDiffuse, uv);
+      float lum = lumG;
 
-      // ── Hologram colour (driven by active filter) ──
-      vec3 holo = holoColor * (lum * 1.5 + 0.06);
+      // ── Hologram colour with chromatic split ──
+      vec3 holo = vec3(
+        holoColor.r * (lumR * 1.8 + 0.08),
+        holoColor.g * (lumG * 1.8 + 0.08),
+        holoColor.b * (lumB * 1.8 + 0.08)
+      );
 
-      // ── Scan lines ──
-      float scan = 0.78 + 0.22 * sin(vUv.y * 220.0 + time * 3.0);
+      // ── Scan lines (thicker, higher contrast) ──
+      float scan = 0.55 + 0.45 * sin(vUv.y * 180.0 + time * 5.0);
+      scan = pow(scan, 1.5);
       holo *= scan;
 
-      // ── Rolling brightness wave ──
-      float roll = 0.88 + 0.12 * sin(vUv.y * 5.0 - time * 1.4);
+      // ── Rolling brightness wave (more dramatic) ──
+      float roll = 0.72 + 0.28 * sin(vUv.y * 4.0 - time * 2.2);
       holo *= roll;
 
-      // ── Flicker ──
-      float flicker = 0.92 + 0.08 * hash(floor(time * 24.0));
-      holo *= flicker;
+      // ── Hard flicker bursts ──
+      float flicker = 0.80 + 0.20 * hash(floor(time * 18.0));
+      float bigFlicker = step(0.94, hash(floor(time * 6.0))) * 0.5; // occasional full dim
+      holo *= flicker * (1.0 - bigFlicker);
 
-      // ── Translucency: character pixels blend against bg, background untouched ──
+      // ── Edge glow (bright rim on character silhouette) ──
+      float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.8;
+      holo += holoColor * edgeGlow;
+
+      // ── Translucency ──
       vec3 bg = vec3(0.039, 0.039, 0.039);
-      float opacity = clamp(lum * 0.65 + 0.12, 0.0, 0.72);
+      float opacity = clamp(lum * 0.55 + 0.10, 0.0, 0.68);
       vec3 holoBlended = mix(bg, holo, opacity);
 
       // Apply holo only where mask says character; leave bg pixels as-is
