@@ -1043,7 +1043,7 @@ function applyTint(colorKey) {
     scene.background = new THREE.Color(0x0a0a0a);
     renderer.setClearColor(0x0a0a0a, 1);
   } else {
-    const tinted = p.color.clone().multiplyScalar(0.06);
+    const tinted = p.color.clone().multiplyScalar(0.036);
     scene.background = tinted;
     renderer.setClearColor(tinted, 1);
   }
