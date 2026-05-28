@@ -652,9 +652,9 @@ const HoloShader = {
 
     void main(){
       vec4 baseRaw = texture2D(tDiffuse, vUv);
-      // Detect character pixels by how much they differ from the near-black bg (#0a0a0a)
-      vec3 bgCol = vec3(0.039);
-      float mask = smoothstep(0.04, 0.12, length(baseRaw.rgb - bgCol));
+      // Sample a corner pixel as the true background reference
+      vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
+      float mask = smoothstep(0.04, 0.14, length(baseRaw.rgb - bgCol));
 
       // ── Horizontal glitch bands (only shift character pixels) ──
       float bandRow  = floor(vUv.y * 80.0);
@@ -727,9 +727,9 @@ const StatusShader = {
 
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
-      // Detect character pixels by how much they differ from the near-black bg (#0a0a0a)
-      vec3 bgCol = vec3(0.039);
-      float mask = smoothstep(0.04, 0.12, length(base.rgb - bgCol));
+      // Sample a corner pixel as the true background reference
+      vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
+      float mask = smoothstep(0.04, 0.14, length(base.rgb - bgCol));
       vec3 col = base.rgb;
       float lum = dot(col, vec3(0.299,0.587,0.114));
       float s = status;
@@ -1037,6 +1037,16 @@ function applyTint(colorKey) {
   const swatch = document.getElementById('swatch');
   swatch.style.background  = noFilter ? 'transparent' : p.hex;
   swatch.style.borderColor = noFilter ? '#333' : p.hex;
+
+  // Tint the viewport background to a very dark shade of the active filter colour
+  if (noFilter) {
+    scene.background = new THREE.Color(0x0a0a0a);
+    renderer.setClearColor(0x0a0a0a, 1);
+  } else {
+    const tinted = p.color.clone().multiplyScalar(0.06);
+    scene.background = tinted;
+    renderer.setClearColor(tinted, 1);
+  }
 }
 
 // ── Load character ────────────────────────────────────────────────────────────
