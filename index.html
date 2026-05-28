@@ -267,12 +267,14 @@
       flex: 1;
       position: relative;
       overflow: hidden;
+      background: #0a0a0a;
     }
 
     canvas {
       display: block;
       width: 100%;
       height: 100%;
+      background: transparent;
     }
 
     #loading {
@@ -514,16 +516,17 @@ const canvas   = document.getElementById('canvas');
 const loadingEl = document.getElementById('loading');
 const nameTag  = document.getElementById('model-name');
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x000000, 0); // transparent — bg comes from CSS
 
 const scene  = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a0a);
+// No scene.background — let the CSS viewport bg show through the canvas
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
 camera.position.set(0, 1.2, 3.5);
@@ -687,13 +690,13 @@ const HoloShader = {
       float flicker = 0.92 + 0.08 * hash(floor(time * 24.0));
       holo *= flicker;
 
-      // ── Translucency: character pixels blend against bg, background untouched ──
-      vec3 bg = vec3(0.039, 0.039, 0.039);
+      // ── Translucency: only on confirmed character pixels, bg always passes through ──
+      float sharpMask = smoothstep(0.25, 0.55, mask);
       float opacity = clamp(lum * 0.65 + 0.12, 0.0, 0.72);
-      vec3 holoBlended = mix(bg, holo, opacity);
+      vec3 holoBlended = mix(base.rgb, holo, opacity); // blend against actual pixel, not hardcoded bg
 
       // Apply holo only where mask says character; leave bg pixels as-is
-      vec3 col = mix(base.rgb, holoBlended, mask);
+      vec3 col = mix(base.rgb, holoBlended, sharpMask);
 
       gl_FragColor = vec4(col, 1.0);
     }
@@ -1038,14 +1041,12 @@ function applyTint(colorKey) {
   swatch.style.background  = noFilter ? 'transparent' : p.hex;
   swatch.style.borderColor = noFilter ? '#333' : p.hex;
 
-  // Tint the viewport background to a very dark shade of the active filter colour
+  // Tint the viewport background via CSS so it bypasses the brightness/gamma passes
+  const viewport = document.getElementById('viewport');
   if (noFilter) {
-    scene.background = new THREE.Color(0x0a0a0a);
-    renderer.setClearColor(0x0a0a0a, 1);
+    viewport.style.background = '#0a0a0a';
   } else {
-    const tinted = p.color.clone().multiplyScalar(0.014);
-    scene.background = tinted;
-    renderer.setClearColor(tinted, 1);
+    viewport.style.background = `color-mix(in srgb, ${p.hex} 8%, #0a0a0a)`;
   }
 }
 
