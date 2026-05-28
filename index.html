@@ -627,14 +627,12 @@ composer.addPass(posterizePass);
 const HoloShader = {
   uniforms: {
     tDiffuse:  { value: null },
-    maskTex:   { value: maskTarget.texture },
     time:      { value: 0.0 },
     holoColor: { value: new THREE.Color(0x44ff88) },
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader: `
     uniform sampler2D tDiffuse;
-    uniform sampler2D maskTex;
     uniform float time;
     uniform vec3 holoColor;
     varying vec2 vUv;
@@ -642,7 +640,10 @@ const HoloShader = {
     float hash(float n){ return fract(sin(n)*43758.5453); }
 
     void main(){
-      float mask = texture2D(maskTex, vUv).r; // 1 = character, 0 = background
+      vec4 baseRaw = texture2D(tDiffuse, vUv);
+      // Detect character pixels by how much they differ from the near-black bg (#0a0a0a)
+      vec3 bgCol = vec3(0.039);
+      float mask = smoothstep(0.04, 0.12, length(baseRaw.rgb - bgCol));
 
       // ── Horizontal glitch bands (only shift character pixels) ──
       float bandRow  = floor(vUv.y * 80.0);
@@ -657,7 +658,7 @@ const HoloShader = {
       float tearAmt  = (hash(tearRow + tearTime) - 0.5) * 0.12 * tearTrig;
 
       vec2 uv = vec2(vUv.x + glitchAmt + tearAmt, vUv.y);
-      vec4 base = texture2D(tDiffuse, uv);
+      vec4 base = texture2D(tDiffuse, uv); // glitch-shifted sample
       float lum = dot(base.rgb, vec3(0.299, 0.587, 0.114));
 
       // ── Hologram colour (driven by active filter) ──
@@ -695,14 +696,12 @@ composer.addPass(holoPass);
 const StatusShader = {
   uniforms: {
     tDiffuse: { value: null },
-    maskTex:  { value: maskTarget.texture },
     time:     { value: 0.0 },
     status:   { value: 0.0 },  // 0=none, 1-12 = effect index
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader: `
     uniform sampler2D tDiffuse;
-    uniform sampler2D maskTex;
     uniform float time;
     uniform float status;
     varying vec2 vUv;
@@ -718,7 +717,9 @@ const StatusShader = {
 
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
-      float mask = texture2D(maskTex, vUv).r;  // 1 = character, 0 = background
+      // Detect character pixels by how much they differ from the near-black bg (#0a0a0a)
+      vec3 bgCol = vec3(0.039);
+      float mask = smoothstep(0.04, 0.12, length(base.rgb - bgCol));
       vec3 col = base.rgb;
       float lum = dot(col, vec3(0.299,0.587,0.114));
       float s = status;
@@ -856,6 +857,8 @@ const StatusShader = {
         col += vec3(1.0,0.5,0.9)*flash;
       }
 
+      // Confine effect to character pixels only
+      col = mix(base.rgb, col, mask);
       gl_FragColor = vec4(col, base.a);
     }
   `,
@@ -1237,7 +1240,6 @@ function resize() {
   const w = vp.clientWidth, h = vp.clientHeight;
   renderer.setSize(w, h);
   composer.setSize(w, h);
-  maskTarget.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   outlinePass.resolution.set(w, h);
@@ -1257,23 +1259,6 @@ function animate() {
   const elapsed = clock.getElapsedTime();
   if (holoPass.enabled)  holoPass.uniforms.time.value   = elapsed;
   if (currentStatus > 0) statusPass.uniforms.time.value = elapsed;
-
-  // Render silhouette mask whenever holo or status effects need it
-  if ((holoPass.enabled || currentStatus > 0) && currentModel) {
-    const savedBg = scene.background;
-    scene.background = null;
-    ground.visible = false;
-    renderer.overrideMaterial = maskOverrideMat;
-    renderer.setClearColor(0x000000, 1);
-    renderer.setRenderTarget(maskTarget);
-    renderer.clear();
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-    renderer.overrideMaterial = null;
-    renderer.setClearColor(0x0a0a0a, 1);
-    ground.visible = true;
-    scene.background = savedBg;
-  }
 
   composer.render();
 }
