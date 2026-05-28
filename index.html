@@ -413,6 +413,13 @@ const GROUPS = [
       'Maimed-Green-Male-Walking.glb',
       'Maimed-Orange-Female-Walking.glb',
       'Maimed-Orange-Male-Walking.glb',
+    ], labels: [
+      'Boss Female 1',
+      'Boss Male 1',
+      'Boss Female 2',
+      'Boss Male 2',
+      'Boss Female 3',
+      'Boss Male 3',
     ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Maimed-Pink-Female-Walking.glb',
@@ -662,27 +669,24 @@ const HoloShader = {
       float lum = dot(base.rgb, vec3(0.299, 0.587, 0.114));
 
       // ── Hologram colour (driven by active filter) ──
-      vec3 holo = holoColor * (lum * 1.5 + 0.06);
+      // Use flat luminance floor so dark/shadowed areas stay bright
+      float litLum = max(lum, 0.45);
+      vec3 holo = holoColor * (litLum * 1.6 + 0.15);
 
       // ── Scan lines ──
-      float scan = 0.78 + 0.22 * sin(vUv.y * 220.0 + time * 3.0);
+      float scan = 0.82 + 0.18 * sin(vUv.y * 220.0 + time * 3.0);
       holo *= scan;
 
       // ── Rolling brightness wave ──
-      float roll = 0.88 + 0.12 * sin(vUv.y * 5.0 - time * 1.4);
+      float roll = 0.92 + 0.08 * sin(vUv.y * 5.0 - time * 1.4);
       holo *= roll;
 
       // ── Flicker ──
-      float flicker = 0.92 + 0.08 * hash(floor(time * 24.0));
+      float flicker = 0.94 + 0.06 * hash(floor(time * 24.0));
       holo *= flicker;
 
-      // ── Translucency: character pixels blend against bg, background untouched ──
-      vec3 bg = vec3(0.039, 0.039, 0.039); // scene background #0a0a0a
-      float opacity = clamp(lum * 0.65 + 0.12, 0.0, 0.72); // never fully opaque
-      vec3 holoBlended = mix(bg, holo, opacity);
-
       // Apply holo only where mask says character; leave bg pixels as-is
-      vec3 col = mix(base.rgb, holoBlended, mask);
+      vec3 col = mix(base.rgb, holo, mask);
 
       gl_FragColor = vec4(col, 1.0);
     }
@@ -1133,14 +1137,14 @@ GROUPS.forEach((group, idx) => {
     head.textContent = section.heading;
     panel.appendChild(head);
 
-    section.files.forEach(file => {
+    section.files.forEach((file, fi) => {
       const filepath = `${section.dir}/${file}`;
       const el = document.createElement('div');
       el.className = 'char-item';
       el.dataset.file = filepath;
       el.dataset.autoRotate = section.autoRotate ? '1' : '';
       el.dataset.scale = section.scale ?? 2.0;
-      el.textContent = file
+      el.textContent = (section.labels && section.labels[fi]) || file
         .replace(/^.*\//, '')
         .replace('.glb', '')
         .replace(/[-_]/g, ' ')
