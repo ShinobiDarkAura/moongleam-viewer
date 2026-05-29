@@ -42,12 +42,12 @@ fi
 
 # ── Destination dir ───────────────────────────────────────────────────────────
 case "$CATEGORY" in
-  characters) DEST_DIR="$MODELS_DIR" ;          DIR_KEY="models" ;;
-  items)      DEST_DIR="$MODELS_DIR/items" ;    DIR_KEY="models/items" ;;
-  scraps)     DEST_DIR="$MODELS_DIR/scraps" ;   DIR_KEY="models/scraps" ;;
-  enemies)    DEST_DIR="$MODELS_DIR/enemies" ;  DIR_KEY="models/enemies" ;;
-  bosses)     DEST_DIR="$MODELS_DIR/bosses" ;   DIR_KEY="models/bosses" ;;
-  v2_enemies) DEST_DIR="$MODELS_DIR/v2_enemies" ; DIR_KEY="models/v2_enemies" ;;
+  characters) DEST_DIR="$MODELS_DIR" ;          DIR_KEY="models" ; FILEPATH_PREFIX="" ;;
+  items)      DEST_DIR="$MODELS_DIR/items" ;    DIR_KEY="models" ; FILEPATH_PREFIX="items/" ;;
+  scraps)     DEST_DIR="$MODELS_DIR/scraps" ;   DIR_KEY="models" ; FILEPATH_PREFIX="scraps/" ;;
+  enemies)    DEST_DIR="$MODELS_DIR/enemies" ;  DIR_KEY="models" ; FILEPATH_PREFIX="enemies/" ;;
+  bosses)     DEST_DIR="$MODELS_DIR/bosses" ;   DIR_KEY="models" ; FILEPATH_PREFIX="bosses/" ;;
+  v2_enemies) DEST_DIR="$MODELS_DIR/v2_enemies" ; DIR_KEY="models" ; FILEPATH_PREFIX="v2_enemies/" ;;
   *)
     echo "❌ Unknown category: $CATEGORY"
     echo "   Valid: characters, items, scraps, enemies, bosses, v2_enemies"
@@ -92,7 +92,7 @@ if grep -q "$FILENAME" "$INDEX"; then
   echo "   ⚠️  $FILENAME already in index.html — skipping."
 else
   # Use python for reliable multi-line edit
-  python3 - "$INDEX" "$SEARCH" "$FILENAME" <<'PYEOF'
+  python3 - "$INDEX" "$SEARCH" "${FILEPATH_PREFIX}${FILENAME}" <<'PYEOF'
 import sys, re
 
 index_path = sys.argv[1]
