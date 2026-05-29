@@ -761,6 +761,18 @@ const StatusShader = {
       return smoothstep(0.04, 0.16, length(texture2D(tDiffuse, uv).rgb - bgCol));
     }
 
+    // Returns 1 if within ~haloR pixels of the character silhouette
+    float nearCharacter(vec2 uv, vec3 bgCol, float haloR){
+      float px = haloR / resolution.x;
+      float py = haloR / resolution.y;
+      float near = isChar(uv, bgCol);
+      for(int i = 0; i < 8; i++){
+        float a = float(i) * 6.28318 / 8.0;
+        near = max(near, isChar(uv + vec2(cos(a)*px, sin(a)*py), bgCol));
+      }
+      return near;
+    }
+
     // Sample a ring of N points at given radius and return max bg-proximity
     float ringNearBg(vec2 uv, vec3 bgCol, float r, int n){
       float px = r / resolution.x;
@@ -795,8 +807,8 @@ const StatusShader = {
       float extraMask = 0.0;
 
       if(s < 1.5){
-        // Vigor: heartbeat — outline pulses red, thickness slams on beat
-        float t = mod(time * 1.3, 1.0);
+        // Vigor: heartbeat — outline pulses red, thickness slams on beat (50% slower)
+        float t = mod(time * 0.65, 1.0);
         float beat = exp(-pow((t-0.08)*28.0,2.0)) + exp(-pow((t-0.22)*38.0,2.0))*0.7;
         radius = 2.5 + beat * 6.0;
         outlineCol = mix(vec3(0.8,0.05,0.05), vec3(1.0,0.3,0.1), beat);
@@ -847,60 +859,63 @@ const StatusShader = {
         samples = 10;
 
       } else if(s < 5.5){
-        // Regen: big bright + signs floating UPWARD, unmasked (appear over and around model)
+        // Regen: green + signs floating upward, around character, 50% translucent
         radius = 1.8;
         outlineCol = vec3(0.2, 1.0, 0.5);
         brightness = 1.0;
-        float cellSz = 0.11; // larger cells = bigger spread
+        float aspect = resolution.x / resolution.y;
+        float cellSz = 0.10;
+        float halo = nearCharacter(vUv, bgCol, 80.0); // zone within ~80px of character
         for(int gx = -1; gx <= 2; gx++){
           for(int gy = -2; gy <= 3; gy++){
-            vec2 cellId = floor(vUv / cellSz) + vec2(float(gx), float(gy));
+            vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
             float rx = hash(cellId) * 0.6 + 0.2;
             float ry = hash(cellId + vec2(17.3, 43.1)) * 0.6 + 0.2;
-            float speed = 0.22 + hash(cellId + vec2(5.0)) * 0.18;
-            // Base cell position, then drift upward by adding time to y
+            float speed = 0.10 + hash(cellId + vec2(5.0)) * 0.08; // slower
             vec2 center;
-            center.x = (cellId.x + rx) * cellSz;
-            float baseY = (cellId.y + ry) * cellSz;
-            center.y = fract(baseY + time * speed); // +time = moves up in UV space
-            vec2 d = vUv - center;
-            float sz = 0.016 + hash(cellId + vec2(2.1)) * 0.008; // bigger plus signs
+            center.x = (cellId.x + rx) * cellSz / aspect;
+            center.y = fract((cellId.y + ry) * cellSz + time * speed); // drift upward
+            // Aspect-corrected distance so plus is square not stretched
+            vec2 d = vec2((vUv.x - center.x) * aspect, vUv.y - center.y);
+            float sz = 0.018 + hash(cellId + vec2(2.1)) * 0.008;
             float barW = sz * 0.30;
             float vert  = max(abs(d.x) - barW, abs(d.y) - sz);
             float horiz = max(abs(d.x) - sz,   abs(d.y) - barW);
             float dist  = min(vert, horiz);
             float alpha = smoothstep(0.002, 0.0, dist);
-            float glow  = smoothstep(0.008, 0.0, dist) * 0.5;
-            float sparkle = 0.75 + 0.25*sin(time*5.0 + hash(cellId)*6.28);
-            extraCol  = mix(extraCol, vec3(0.3,1.0,0.5)*sparkle*1.4, alpha);
-            extraMask = max(extraMask, (alpha + glow) * sparkle);
+            float glow  = smoothstep(0.010, 0.0, dist) * 0.4;
+            float sparkle = 0.75 + 0.25*sin(time*4.0 + hash(cellId)*6.28);
+            extraCol  = mix(extraCol, vec3(0.15,1.0,0.4)*sparkle, alpha);
+            extraMask = max(extraMask, (alpha + glow) * sparkle * 0.5 * halo); // 50% opacity, near char only
           }
         }
 
       } else if(s < 6.5){
-        // Block: floating light-blue diamond shapes drifting up, like regen but calmer
+        // Block: light-blue diamonds drifting up, around character, 50% translucent
         radius = 1.5;
         outlineCol = vec3(0.5, 0.85, 1.0);
         brightness = 0.9;
-        float cellSz = 0.13;
+        float aspect = resolution.x / resolution.y;
+        float cellSz = 0.12;
+        float halo = nearCharacter(vUv, bgCol, 80.0);
         for(int gx = -1; gx <= 2; gx++){
           for(int gy = -2; gy <= 3; gy++){
-            vec2 cellId = floor(vUv / cellSz) + vec2(float(gx), float(gy));
+            vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
             float rx = hash(cellId) * 0.6 + 0.2;
             float ry = hash(cellId + vec2(9.1, 27.4)) * 0.6 + 0.2;
-            float speed = 0.10 + hash(cellId + vec2(3.3)) * 0.08; // slower than regen
+            float speed = 0.07 + hash(cellId + vec2(3.3)) * 0.05; // slower than regen
             vec2 center;
-            center.x = (cellId.x + rx) * cellSz;
+            center.x = (cellId.x + rx) * cellSz / aspect;
             center.y = fract((cellId.y + ry) * cellSz + time * speed);
-            vec2 d = abs(vUv - center);
-            // Diamond shape: rotate 45° = abs(x)+abs(y) < size
-            float sz = 0.010 + hash(cellId + vec2(6.7)) * 0.006;
-            float diamond = d.x + d.y; // L1 distance = diamond
-            float alpha = smoothstep(sz + 0.001, sz - 0.001, diamond);
-            float glow  = smoothstep(sz + 0.007, sz, diamond) * 0.35;
-            float pulse = 0.8 + 0.2*sin(time*2.5 + hash(cellId)*6.28);
-            extraCol  = mix(extraCol, vec3(0.5,0.85,1.0)*pulse*1.2, alpha);
-            extraMask = max(extraMask, (alpha + glow) * pulse);
+            // Aspect-corrected L1 distance = diamond shape
+            vec2 d = abs(vec2((vUv.x - center.x) * aspect, vUv.y - center.y));
+            float sz = 0.012 + hash(cellId + vec2(6.7)) * 0.006;
+            float diamond = d.x + d.y;
+            float alpha = smoothstep(sz + 0.002, sz - 0.001, diamond);
+            float glow  = smoothstep(sz + 0.009, sz, diamond) * 0.3;
+            float pulse = 0.8 + 0.2*sin(time*2.0 + hash(cellId)*6.28);
+            extraCol  = mix(extraCol, vec3(0.3,0.75,1.0)*pulse, alpha);
+            extraMask = max(extraMask, (alpha + glow) * pulse * 0.5 * halo); // 50% opacity, near char only
           }
         }
 
