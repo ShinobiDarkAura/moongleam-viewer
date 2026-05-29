@@ -260,8 +260,28 @@
       text-transform: uppercase;
       color: #3a3a3a;
       margin-top: 2px;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
     }
     .section-head:first-child { margin-top: 0; }
+    .section-head::after {
+      content: '▼';
+      position: absolute;
+      right: 14px;
+      font-size: 6px;
+      transition: transform 0.2s;
+    }
+    .section-head.collapsed::after {
+      transform: rotate(-90deg);
+    }
+    .section-content {
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .section-content.collapsed {
+      max-height: 0 !important;
+    }
 
     #viewport {
       flex: 1;
@@ -406,7 +426,7 @@ const PALETTE = {
 
 const GROUPS = [
   { label: 'Round 1', sections: [
-    { heading: 'Elite', dir: 'models', scale: 1.63, autoRotate: false, files: [
+    { heading: 'Elite', dir: 'models', scale: 1.63, autoRotate: false, collapsed: false, files: [
       'Neutral-Female.glb',
       'Neutral-Male.glb',
       'Green Female.glb',
@@ -419,7 +439,7 @@ const GROUPS = [
       'base_alt_male_green_walking.glb',
       'base_alt_female_green_walking.glb',
   ]},
-    { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
+    { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, collapsed: false, files: [
       'Maimed-Pink-Female-Walking.glb',
       'Maimed-Pink-Male-Walking.glb',
       'Maimed-Purple-Female-Walking.glb',
@@ -427,20 +447,20 @@ const GROUPS = [
       'Maimed-Red-Female-Walking.glb',
       'Maimed-Red-Male-Walking.glb',
     ]},
-    { heading: 'Base Characters', dir: 'models', scale: 1.63, autoRotate: false, files: [
+    { heading: 'Base Characters', dir: 'models', scale: 1.63, autoRotate: false, collapsed: false, files: [
       'Base Female Orange V2.glb',
       'Tactical Female Black.glb',
     ]},
-    { heading: 'Enemies', dir: 'models', scale: 1.5, autoRotate: false, files: [
+    { heading: 'Enemies', dir: 'models', scale: 1.5, autoRotate: false, collapsed: false, files: [
       'enemies/basic_enemy_v2.glb',
       'enemies/elite_enemy_v2.glb',
       'enemies/maimed_enemy_v2.glb',
     ]},
-    { heading: 'Boss Units', dir: 'models', scale: 1.0, autoRotate: false, files: [
+    { heading: 'Boss Units', dir: 'models', scale: 1.0, autoRotate: false, collapsed: false, files: [
       'bosses/boss_spider_tank.glb',
       'bosses/Boss Male Red.glb',
     ]},
-    { heading: 'V2 Frames', dir: 'models', scale: 1.5, autoRotate: false, files: [
+    { heading: 'V2 Frames', dir: 'models', scale: 1.5, autoRotate: false, collapsed: false, files: [
       'v2_enemies/Skull Punk Female.glb',
       'v2_enemies/Hooded Knight Blue.glb',
       'v2_enemies/Wasteland Scavenger.glb',
@@ -451,7 +471,7 @@ const GROUPS = [
       'v2_enemies/Pink Cyborg Warrior.glb',
       'v2_enemies/Pink Dino Mech.glb',
     ]},
-    { heading: 'Items', dir: 'models', scale: 1.0, autoRotate: false, files: [
+    { heading: 'Items', dir: 'models', scale: 1.0, autoRotate: false, collapsed: false, files: [
       'items/item_battery_cell.glb',
       'items/item_module_fragment.glb',
       'items/item_module_kit.glb',
@@ -465,7 +485,7 @@ const GROUPS = [
       'items/Purple Processor.glb',
       'items/Purple Crystal.glb',
     ]},
-    { heading: 'Scraps', dir: 'models', scale: 1.0, autoRotate: false, files: [
+    { heading: 'Scraps', dir: 'models', scale: 1.0, autoRotate: false, collapsed: false, files: [
       'scraps/item_scrap.glb',
       'scraps/scrap_option2.glb',
       'scraps/hexagonal_tokens.glb',
@@ -476,8 +496,6 @@ const GROUPS = [
     ]},
   ]},
   { label: 'Round 2', sections: [
-    { heading: 'May 29 Batch', dir: 'models', scale: 1.63, autoRotate: false, collapsed: false, files: [
-    ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, collapsed: false, files: [
       'enemies/Maimed Female 1.glb',
       'enemies/Maimed Male 2.glb',
@@ -1445,7 +1463,24 @@ GROUPS.forEach((group, idx) => {
     // Section heading
     const head = document.createElement('div');
     head.className = 'section-head';
+    if (section.collapsed) head.classList.add('collapsed');
     head.textContent = section.heading;
+    
+    // Section content wrapper
+    const content = document.createElement('div');
+    content.className = 'section-content';
+    if (section.collapsed) content.classList.add('collapsed');
+    
+    // Accordion toggle
+    head.addEventListener('click', () => {
+      const isCollapsed = head.classList.toggle('collapsed');
+      content.classList.toggle('collapsed', isCollapsed);
+      if (!isCollapsed) {
+        // Calculate height when expanding
+        content.style.maxHeight = content.scrollHeight + 'px';
+      }
+    });
+    
     panel.appendChild(head);
 
     section.files.forEach((file, fi) => {
@@ -1469,8 +1504,17 @@ GROUPS.forEach((group, idx) => {
         el.classList.add('active');
         loadCharacter(filepath, section.autoRotate ?? false, section.scale ?? 2.0);
       });
-      panel.appendChild(el);
+      content.appendChild(el);
     });
+    
+    // Set initial max-height for expanded sections
+    if (!section.collapsed) {
+      setTimeout(() => {
+        content.style.maxHeight = content.scrollHeight + 'px';
+      }, 0);
+    }
+    
+    panel.appendChild(content);
   });
 
   listEl.appendChild(panel);
