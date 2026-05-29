@@ -730,174 +730,179 @@ const HoloShader = {
 const holoPass = new ShaderPass(HoloShader);
 holoPass.enabled = false;
 
-// ── Status Effect pass ───────────────────────────────────────────────────────
+// ── Status Effect pass — outline-based ──────────────────────────────────────
 const StatusShader = {
   uniforms: {
-    tDiffuse: { value: null },
-    time:     { value: 0.0 },
-    status:   { value: 0.0 },  // 0=none, 1-12 = effect index
+    tDiffuse:   { value: null },
+    time:       { value: 0.0 },
+    status:     { value: 0.0 },
+    resolution: { value: new THREE.Vector2(800, 600) },
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader: `
     uniform sampler2D tDiffuse;
     uniform float time;
     uniform float status;
+    uniform vec2 resolution;
     varying vec2 vUv;
 
     float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float hash1(float n){ return fract(sin(n)*43758.5453); }
     float noise(vec2 p){
       vec2 i=floor(p); vec2 f=fract(p);
       float a=hash(i),b=hash(i+vec2(1,0)),c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
       vec2 u=f*f*(3.0-2.0*f);
       return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
     }
-    float fbm(vec2 p){ return noise(p)*0.5+noise(p*2.1)*0.25+noise(p*4.3)*0.125; }
+
+    // Detect whether a UV point is a character pixel
+    float isChar(vec2 uv, vec3 bgCol){
+      return smoothstep(0.04, 0.16, length(texture2D(tDiffuse, uv).rgb - bgCol));
+    }
+
+    // Sample a ring of N points at given radius and return max bg-proximity
+    float ringNearBg(vec2 uv, vec3 bgCol, float r, int n){
+      float px = r / resolution.x;
+      float py = r / resolution.y;
+      float nearBg = 0.0;
+      for(int i = 0; i < 12; i++){
+        if(i >= n) break;
+        float a = float(i) * 6.28318 / float(n);
+        vec2 off = vec2(cos(a)*px, sin(a)*py);
+        nearBg = max(nearBg, 1.0 - isChar(uv + off, bgCol));
+      }
+      return nearBg;
+    }
 
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
-      // Sample a corner pixel as the true background reference
+      if(status < 0.5){ gl_FragColor = base; return; }
+
       vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
-      float mask = smoothstep(0.04, 0.14, length(base.rgb - bgCol));
-      vec3 col = base.rgb;
-      float lum = dot(col, vec3(0.299,0.587,0.114));
       float s = status;
+      float px = 1.0 / resolution.x;
+      float py = 1.0 / resolution.y;
 
-      // 1 — Vigor: heartbeat red energy veins
+      // ── Per-status: warp UV for wavy outlines, set thickness + color ──
+      vec2 warpedUv = vUv;
+      float radius = 3.0;
+      vec3 outlineCol = vec3(1.0);
+      float brightness = 1.0;
+      int   samples = 8;
+
       if(s < 1.5){
-        // Heartbeat: two sharp thumps (lub-dub) then silence
+        // Vigor: heartbeat — outline pulses red, thickness slams on beat
         float t = mod(time * 1.3, 1.0);
-        float lub = exp(-pow((t - 0.08) * 28.0, 2.0));
-        float dub = exp(-pow((t - 0.22) * 38.0, 2.0)) * 0.7;
-        float beat = lub + dub;
-        // Veins swell with each beat
-        float vein = fbm(vUv*4.0 + vec2(0.0, time*0.3) + beat*0.08);
-        vein = smoothstep(0.45, 0.72, vein);
-        // Base red tint always on, slams bright on beat
-        col = mix(col, col * vec3(2.5, 0.15, 0.15), 0.35 + vein * 0.45);
-        col += vec3(1.0, 0.0, 0.0) * beat * 0.55;
-        col += vec3(0.6, 0.0, 0.0) * vein * (0.3 + beat * 0.5);
+        float beat = exp(-pow((t-0.08)*28.0,2.0)) + exp(-pow((t-0.22)*38.0,2.0))*0.7;
+        radius = 2.5 + beat * 6.0;
+        outlineCol = mix(vec3(0.8,0.05,0.05), vec3(1.0,0.3,0.1), beat);
+        brightness = 0.7 + beat * 0.8;
 
-      // 2 — Strike: electric red streaks
       } else if(s < 2.5){
-        float bolt = noise(vec2(vUv.x*1.5, time*10.0+vUv.y*0.3));
-        bolt = smoothstep(0.72,0.78,bolt);
-        float vert = abs(fract(vUv.x*25.0+noise(vec2(vUv.x*3.0,time*5.0))*2.0)-0.5)*2.0;
-        vert = smoothstep(0.85,1.0,vert);
-        float flash = 0.5+0.5*sin(time*12.0+vUv.y*20.0);
-        col = mix(col, vec3(1.0,0.05,0.05)*2.0, (bolt+vert)*0.6*flash);
-        col += vec3(0.5,0.0,0.0)*(bolt+vert)*0.3;
+        // Strike: electric jagged outline — random per-row X jitter
+        float row = floor(vUv.y * resolution.y / 3.0);
+        float jitter = (hash(vec2(row, floor(time*15.0))) - 0.5) * 0.012;
+        warpedUv.x += jitter;
+        radius = 2.0 + hash1(floor(time*20.0)) * 3.0;
+        outlineCol = mix(vec3(0.2,0.5,1.0), vec3(1.0,1.0,1.0), hash1(floor(time*30.0)));
+        brightness = 0.8 + hash1(floor(time*25.0)) * 0.6;
 
-      // 3 — Burn: fire scrolling up
       } else if(s < 3.5){
-        vec2 fuv = vUv*vec2(1.5,2.0) + vec2(fbm(vUv*2.0+time*0.3)*0.3, -time*0.7);
-        float fire = fbm(fuv*3.0);
-        fire = smoothstep(0.35,0.8,fire) * (1.0-vUv.y*0.6);
-        vec3 fireCol = mix(vec3(1.0,0.15,0.0),vec3(1.0,0.7,0.0),fire);
-        fireCol = mix(fireCol,vec3(1.0,1.0,0.8),fire*fire);
-        float flicker = 0.7+0.3*sin(time*17.0)*sin(time*7.3);
-        col = mix(col, col*fireCol*1.5, fire*0.65*flicker);
-        col += fireCol*fire*0.2*flicker;
+        // Burn: wavy upward drift, orange/red flicker
+        float wave = sin(vUv.y * 18.0 + time * 4.0) * 0.006;
+        warpedUv.x += wave;
+        warpedUv.y -= noise(vec2(vUv.x * 3.0, time * 0.8)) * 0.008;
+        radius = 2.5 + noise(vec2(vUv.x * 4.0, time * 2.0)) * 3.5;
+        float flicker = 0.6 + 0.4*sin(time*17.0)*sin(time*7.3);
+        outlineCol = mix(vec3(1.0,0.15,0.0), vec3(1.0,0.75,0.0), noise(vec2(vUv.x*2.0, time)));
+        brightness = flicker * 1.4;
 
-      // 4 — Corrosion: dripping acid bubbles
       } else if(s < 4.5){
-        vec2 auv = vUv*vec2(6.0,8.0) + vec2(0.0, time*0.25);
-        float drip = noise(auv);
-        float bubble = smoothstep(0.62,0.68,drip)*smoothstep(0.72,0.68,drip);
-        float spots = smoothstep(0.55,0.8,fbm(vUv*9.0+time*0.1));
-        col = mix(col, vec3(0.35,0.85,0.05)*1.8, spots*0.5);
-        col = mix(col, vec3(1.0,0.9,0.0)*2.0, bubble*0.8);
-        col *= 1.0-spots*0.25;
+        // Corrosion: dripping downward distortion, acid green
+        float drip = sin(vUv.x * 22.0 + time * 0.5) * 0.005;
+        warpedUv.y += drip + noise(vec2(vUv.x * 5.0, time * 0.3)) * 0.01;
+        radius = 2.0 + noise(vec2(vUv.x * 3.0, time * 0.4)) * 2.5;
+        outlineCol = mix(vec3(0.2,0.9,0.05), vec3(0.8,1.0,0.0), noise(vec2(vUv.x*4.0, time*0.6)));
+        brightness = 1.1;
 
-      // 5 — Regen: rising green sparkles + glow
       } else if(s < 5.5){
-        float beat = 0.5+0.5*sin(time*2.5);
-        vec2 suv = vec2(vUv.x*3.0, fract(vUv.y - time*0.4)*3.0);
-        float sparkle = noise(suv*8.0+time)*noise(suv*5.0);
-        sparkle = smoothstep(0.6,0.9,sparkle)*(1.0-vUv.y*0.5);
-        col = mix(col, col+vec3(0.0,0.8,0.3), 0.3+beat*0.15);
-        col += vec3(0.1,1.0,0.4)*sparkle*0.9*beat;
-        col += vec3(0.0,0.3,0.1)*beat*0.1;
+        // Regen: thin sparkling green, rises upward
+        float rise = mod(vUv.y + time * 0.3, 1.0);
+        warpedUv.y -= noise(vec2(vUv.x * 6.0, time * 0.5)) * 0.006;
+        radius = 1.5 + hash(vec2(floor(vUv.x*80.0), floor(time*8.0))) * 2.0;
+        float sparkle = step(0.7, hash(vec2(floor(vUv.x*60.0), floor(time*12.0))));
+        outlineCol = mix(vec3(0.1,0.9,0.4), vec3(0.6,1.0,0.7), sparkle);
+        brightness = 0.7 + sparkle * 0.8;
 
-      // 6 — Block: blue crystal lattice shield
       } else if(s < 6.5){
-        float gx = abs(sin(vUv.x*28.0));
-        float gy = abs(sin(vUv.y*28.0));
-        float grid = smoothstep(0.88,0.95,max(gx,gy));
-        float diag = smoothstep(0.88,0.95,abs(sin((vUv.x+vUv.y)*20.0)));
-        float pulse = 0.4+0.6*abs(sin(time*1.8));
-        col = mix(col, vec3(0.2,0.5,1.0)*2.0, (grid+diag*0.5)*pulse*0.7);
-        col += vec3(0.05,0.15,0.4)*0.2*pulse;
+        // Block: thick hard blue — no warp, pulsing thickness
+        float pulse = 0.5 + 0.5*abs(sin(time*1.8));
+        radius = 4.0 + pulse * 4.0;
+        outlineCol = vec3(0.2, 0.5, 1.0);
+        brightness = 0.8 + pulse * 0.5;
+        samples = 12;
 
-      // 7 — Reflect: rotating shimmer + distortion
       } else if(s < 7.5){
-        float ang = time*0.8;
-        float ca=cos(ang),sa=sin(ang);
-        vec2 ruv=vec2(ca*(vUv.x-0.5)-sa*(vUv.y-0.5)+0.5, sa*(vUv.x-0.5)+ca*(vUv.y-0.5)+0.5);
-        float shim = smoothstep(0.55,0.85,noise(ruv*12.0)*noise(ruv*6.0+time*0.5));
-        vec2 distUv = vUv + vec2(noise(vUv*8.0+time)-0.5,noise(vUv*8.0-time)-0.5)*0.015*shim;
-        col = texture2D(tDiffuse, distUv).rgb;
-        col = mix(col, col+vec3(0.3,0.7,1.0)*shim, 0.6);
-        col += vec3(0.6,0.9,1.0)*shim*0.3;
+        // Reflect: rotating rainbow, thin shimmer
+        float ang = time * 1.2;
+        warpedUv = vec2(
+          cos(ang)*(vUv.x-0.5) - sin(ang)*(vUv.y-0.5) + 0.5,
+          sin(ang)*(vUv.x-0.5) + cos(ang)*(vUv.y-0.5) + 0.5
+        );
+        radius = 2.0;
+        float hue = fract(vUv.x + vUv.y + time * 0.4);
+        outlineCol = 0.5 + 0.5*vec3(cos(hue*6.28), cos(hue*6.28+2.09), cos(hue*6.28+4.19));
+        brightness = 1.2;
 
-      // 8 — Weak: sickly desaturation + purple cast + jitter
       } else if(s < 8.5){
-        float jitter = (noise(vUv*60.0+time*4.0)-0.5)*0.012;
-        vec3 jitCol = texture2D(tDiffuse, vUv+jitter).rgb;
-        float jlum = dot(jitCol, vec3(0.299,0.587,0.114));
-        col = mix(vec3(jlum), jitCol, 0.45);
-        col = mix(col, vec3(0.45,0.1,0.6), 0.25);
-        col *= 0.85;
+        // Weak: very thin, faded purple, slight tremor
+        float tremor = (hash(vec2(floor(vUv.y*120.0), floor(time*6.0)))-0.5)*0.004;
+        warpedUv.x += tremor;
+        radius = 1.2;
+        outlineCol = vec3(0.45, 0.1, 0.6);
+        brightness = 0.45;
 
-      // 9 — Frail: shattering purple cracks
       } else if(s < 9.5){
-        float c1 = smoothstep(0.7,0.74,noise(vUv*18.0));
-        float c2 = smoothstep(0.7,0.74,noise(vUv*12.0+vec2(3.7,1.2)));
-        float crack = max(c1,c2);
-        float glow = 0.4+0.6*abs(sin(time*2.0));
-        col = mix(col, vec3(0.0), crack*0.8);
-        col += vec3(0.6,0.1,0.9)*crack*glow*1.2;
-        col = mix(col, vec3(0.55,0.1,0.75), 0.15);
+        // Frail: broken/dotted outline — gaps via hash
+        float gap = step(0.45, hash(vec2(floor(vUv.x*90.0+time*0.5), floor(vUv.y*90.0))));
+        radius = 2.0;
+        outlineCol = vec3(0.55, 0.05, 0.8);
+        brightness = gap * (0.6 + 0.4*abs(sin(time*2.5)));
 
-      // 10 — Leech: undulating pink blobs draining upward
       } else if(s < 10.5){
-        vec2 b1uv = vUv * 3.5 + vec2(sin(time*0.7+vUv.y*3.0)*0.15, -time*0.28);
-        vec2 b2uv = vUv * 2.2 + vec2(cos(time*0.5+vUv.x*2.5)*0.2,  -time*0.18 + 0.4);
-        float blob1 = noise(b1uv) * noise(b1uv * 1.8 + time * 0.3);
-        float blob2 = noise(b2uv) * noise(b2uv * 2.3 - time * 0.4);
-        float blobs = smoothstep(0.28, 0.52, blob1) + smoothstep(0.28, 0.52, blob2) * 0.7;
-        blobs = min(blobs, 1.0);
-        float undulate = 0.5 + 0.5 * sin(time * 2.2 + vUv.y * 6.0 + vUv.x * 4.0);
-        blobs *= 0.7 + undulate * 0.3;
-        vec3 blobCol = mix(vec3(1.0, 0.1, 0.6), vec3(0.5, 0.0, 0.9), blob1);
-        col = mix(col, col * vec3(0.5, 0.05, 0.4), blobs * 0.55);
-        col += blobCol * blobs * 0.85;
-        col = mix(col, col + vec3(0.3, 0.0, 0.2), 0.2);
+        // Leech: fat undulating pink/purple, organic warp
+        float wobX = sin(vUv.y * 8.0 + time * 1.5) * 0.008;
+        float wobY = cos(vUv.x * 8.0 + time * 1.2) * 0.006;
+        warpedUv += vec2(wobX, wobY);
+        radius = 3.0 + sin(time*2.2 + vUv.y*5.0)*2.0;
+        outlineCol = mix(vec3(1.0,0.1,0.6), vec3(0.6,0.0,0.9), 0.5+0.5*sin(time*1.8));
+        brightness = 1.1;
 
-      // 11 — Clear: bright green cleanse flash + sparkle sweep
       } else if(s < 11.5){
-        float wave = fract(time*0.6);
-        float sweep = smoothstep(wave-0.05,wave,vUv.y)*smoothstep(wave+0.15,wave,vUv.y);
-        float sparkle = noise(vUv*20.0+time*3.0);
-        sparkle = smoothstep(0.75,0.95,sparkle)*sweep;
-        float glow = sweep*0.5;
-        col = mix(col, vec3(0.5,1.0,0.4)*2.0, glow+sparkle*0.8);
-        col += vec3(0.3,1.0,0.5)*sparkle;
+        // Clear: sweeping bright green wave up the outline
+        float sweep = fract(time * 0.7);
+        float inSweep = smoothstep(sweep-0.1, sweep, vUv.y) * smoothstep(sweep+0.2, sweep, vUv.y);
+        radius = 2.0 + inSweep * 4.0;
+        outlineCol = mix(vec3(0.2,0.8,0.3), vec3(0.7,1.0,0.6), inSweep);
+        brightness = 0.5 + inSweep * 1.2;
 
-      // 12 — Purge: explosive pink radial wave
       } else {
-        float radial = length(vUv-0.5)*2.0;
-        float wave = sin(radial*14.0 - time*7.0);
-        float ring = smoothstep(0.0,0.4,wave)*smoothstep(0.8,0.4,radial);
-        float core = max(0.0,1.0-radial*1.8)*(0.5+0.5*sin(time*5.0));
-        col = mix(col, vec3(1.0,0.15,0.7)*2.2, ring*0.7+core*0.5);
-        col += vec3(0.8,0.0,0.5)*ring*0.4;
-        float flash = max(0.0, sin(time*4.0)*0.5)*core;
-        col += vec3(1.0,0.5,0.9)*flash;
+        // Purge: rapidly expanding/contracting pink rings
+        float ring = abs(sin(length(vUv-0.5)*30.0 - time*8.0));
+        ring = smoothstep(0.4, 0.0, ring);
+        radius = 2.5 + ring * 6.0;
+        outlineCol = mix(vec3(1.0,0.1,0.6), vec3(1.0,0.7,0.9), ring);
+        brightness = 0.8 + ring * 0.8;
       }
 
-      // Confine effect to character pixels only
-      col = mix(base.rgb, col, mask);
-      gl_FragColor = vec4(col, base.a);
+      // ── Detect outline: character pixel with at least one bg neighbour ──
+      float charHere = isChar(warpedUv, bgCol);
+      float nearBg   = ringNearBg(warpedUv, bgCol, radius, samples);
+      float outline  = charHere * nearBg;
+
+      // ── Composite: replace outline pixels with status colour ──
+      vec3 col = mix(base.rgb, outlineCol * brightness, outline);
+      gl_FragColor = vec4(col, 1.0);
     }
   `,
 };
@@ -1295,6 +1300,7 @@ function resize() {
   outlinePass.resolution.set(w, h);
   const pr = renderer.getPixelRatio();
   pixelPass.uniforms.resolution.value.set(w * pr, h * pr);
+  statusPass.uniforms.resolution.value.set(w * pr, h * pr);
 }
 new ResizeObserver(resize).observe(document.getElementById('viewport'));
 resize();
