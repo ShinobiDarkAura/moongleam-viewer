@@ -416,6 +416,7 @@ const GROUPS = [
       'orange_male_base_walking.glb',
       'orange_female_base_walking.glb',
       'v2_enemies/elite_alt_female_tan_walking.glb',
+      'v2_enemies/elite_alt_male_tan_walking.glb',
   ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Maimed-Pink-Female-Walking.glb',
@@ -877,78 +878,90 @@ const StatusShader = {
         brightness = 0.9 + spark * 0.7;
 
       } else if(s < 3.5){
-        // Burn: licking flame tongues around the outline — tall, tapered, fast
+        // Burn: animated outline only (no doubled warp), + flame sprites rising slowly
         float f1 = noise(vec2(vUv.x * 6.0,  time * 5.0 - vUv.y * 3.0));
         float f2 = noise(vec2(vUv.x * 11.0, time * 8.0 - vUv.y * 5.0 + 1.7));
         float flameshape = f1 * 0.6 + f2 * 0.4;
-        float twist = sin(vUv.x * 7.0 + time * 6.0) * 0.022 + sin(vUv.x*18.0+time*11.0)*0.007;
+        // Only horizontal twist — no vertical warp that creates double outline
+        float twist = sin(vUv.x * 7.0 + time * 6.0) * 0.012 + sin(vUv.x*18.0+time*11.0)*0.004;
         warpedUv.x += twist;
-        warpedUv.y -= flameshape * 0.030 + f2 * 0.012;
         float spikeMult = 1.0 - clamp(vUv.y * 1.2 - 0.1, 0.0, 1.0);
-        radius = 2.0 + flameshape * 12.0 * (0.5 + spikeMult * 0.5);
+        radius = 1.5 + flameshape * 8.0 * (0.5 + spikeMult * 0.5);
         float fireT = clamp(1.0 - vUv.y * 1.3, 0.0, 1.0);
         float flicker = 0.55 + 0.45*sin(time*21.0)*sin(time*8.3+vUv.x*5.0);
         outlineCol = mix(vec3(1.0,0.9,0.0), vec3(1.0,0.15,0.0), fireT);
         outlineCol = mix(outlineCol, vec3(1.0,1.0,0.6), f2 * flameshape * 0.5);
         brightness = (1.2 + flicker * 0.8) * 1.5;
         samples = 10;
-        // Flame sprite particles drifting upward around the character
+        // Flame icon sprites — slower, teardrop-shaped, with red→orange→yellow gradient
         {
           float aspect = resolution.x / resolution.y;
-          float cellSz = 0.15;
-          float halo = nearCharacter(vUv, bgCol, 80.0);
+          float cellSz = 0.17;
+          // Soft halo: full intensity within 40px, fades to ~25% at 85px
+          float hNear = nearCharacter(vUv, bgCol, 40.0);
+          float hFar  = nearCharacter(vUv, bgCol, 85.0);
+          float halo  = hFar * (0.25 + 0.75 * hNear);
           for(int gx = -1; gx <= 2; gx++){
             for(int gy = -2; gy <= 3; gy++){
               vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
               float rx = hash(cellId) * 0.6 + 0.2;
               float ry = hash(cellId + vec2(23.5, 67.2)) * 0.6 + 0.2;
-              float spd = 0.20 + hash(cellId + vec2(7.0)) * 0.16; // fast rising flames
+              float spd = 0.11 + hash(cellId + vec2(7.0)) * 0.08; // slower
               vec2 fcenter;
               fcenter.x = (cellId.x + rx) * cellSz / aspect;
               fcenter.y = fract((cellId.y + ry) * cellSz + time * spd);
-              float lifeFade = smoothstep(0.0, 0.12, fcenter.y) * smoothstep(1.05, 0.65, fcenter.y);
-              // Undulation: flame wiggles as it rises
-              float wiggle = sin(time * 9.0 + hash(cellId) * 6.28 + fcenter.y * 14.0) * 0.013;
+              float lifeFade = smoothstep(0.0, 0.14, fcenter.y) * smoothstep(1.05, 0.62, fcenter.y);
+              float wiggle = sin(time * 7.0 + hash(cellId) * 6.28 + fcenter.y * 12.0) * 0.011;
               vec2 fd = vec2((vUv.x - fcenter.x + wiggle) * aspect, vUv.y - fcenter.y);
-              float fsz = 0.022 + hash(cellId + vec2(1.3)) * 0.012;
-              // Teardrop flame: squished, tapered at top
-              float fx = fd.x / (fsz * 0.48);
-              float fy = (fd.y - fsz * 0.15) / (fsz * 1.1);
-              float taper = max(0.18, 1.0 - (fy + 0.4) * 0.55);
-              float fdist = length(vec2(fx / taper, fy + 0.15)) - 1.0;
-              float falpha = smoothstep(0.06, -0.01, fdist);
-              float fglow  = smoothstep(0.35, 0.0, fdist) * 0.45;
-              // Red (bottom) → orange → yellow (top) gradient within flame
-              float fgrad = clamp(fd.y / (fsz * 1.6) + 0.55, 0.0, 1.0);
-              vec3 fCol = mix(vec3(1.0, 0.04, 0.0), vec3(1.0, 0.85, 0.0), fgrad);
-              float fflicker = 0.65 + 0.35 * sin(time * 16.0 + hash(cellId) * 6.28);
+              float fsz = 0.025 + hash(cellId + vec2(1.3)) * 0.013;
+              // Classic flame teardrop: rounded base (circle offset down), sharp top
+              // Normalized coords: fxN/fyN bring it to unit circle at base
+              float fyN = (fd.y - fsz * 0.25) / (fsz * 1.3);   // y: -1 at base, +1 at tip
+              float tipW = max(0.12, 0.9 - max(0.0, fyN) * 1.1); // narrows sharply toward tip
+              float fxN  = fd.x / (fsz * 0.62 * tipW);
+              float fdist = length(vec2(fxN, fyN)) - 1.0;
+              // Clamp: no flame below the circle base
+              fdist = max(fdist, -(fd.y + fsz * 0.7));
+              float falpha = smoothstep(0.04, 0.0, fdist);
+              // Red (base, low y) → orange → yellow (tip, high y)
+              float fgrad = clamp((fd.y + fsz * 0.5) / (fsz * 2.2), 0.0, 1.0);
+              vec3 fCol = mix(vec3(1.0, 0.02, 0.0), mix(vec3(1.0,0.5,0.0), vec3(1.0,0.92,0.0), fgrad*2.0-0.5), fgrad);
+              float fflicker = 0.68 + 0.32 * sin(time * 14.0 + hash(cellId) * 6.28);
               extraCol  = mix(extraCol, fCol * fflicker, falpha);
-              extraMask = max(extraMask, (falpha + fglow) * fflicker * 0.75 * halo * lifeFade);
+              extraMask = max(extraMask, falpha * fflicker * halo * lifeFade);
             }
           }
         }
 
       } else if(s < 4.5){
-        // Corrosion: acid — cyan/green bubbling, caustic drips
-        float bubble = noise(vec2(vUv.x * 14.0, vUv.y * 14.0 + time * 2.5));
-        float drip = sin(vUv.x * 18.0) * 0.01 + noise(vec2(vUv.x*6.0, time*1.5)) * 0.015;
+        // Corrosion: sinusoidal undulating outline scrolling downward, acid cyan/green
+        // Two sine waves moving downward at different speeds for organic undulation
+        float sineA = sin(vUv.y * 8.0 - time * 2.2) * 0.022;
+        float sineB = sin(vUv.y * 13.0 - time * 3.5 + 1.8) * 0.011;
+        warpedUv.x += sineA + sineB;
+        // Slight drip downward
+        float drip = noise(vec2(vUv.x * 5.0, time * 0.9)) * 0.010;
         warpedUv.y += drip;
-        warpedUv.x += sin(vUv.y * 12.0 + time * 3.0) * 0.006;
-        radius = 2.0 + bubble * 5.0;
-        float caustic = 0.5 + 0.5*sin(time*8.0 + vUv.x*20.0 + vUv.y*15.0);
-        outlineCol = mix(vec3(0.0,1.0,0.7), vec3(0.0,0.85,0.3), caustic); // cyan→acid green
-        outlineCol = mix(outlineCol, vec3(0.5,1.0,0.9), bubble * 0.4);    // bright cyan highlights
-        brightness = 1.4 + bubble * 0.6;
+        // Radius pulses with the sine wave for thickness variation
+        float wavePhase = sin(vUv.y * 8.0 - time * 2.2);
+        radius = 2.5 + wavePhase * 1.8 + noise(vec2(vUv.x*8.0, vUv.y*8.0+time*1.5)) * 1.5;
+        float caustic = 0.5 + 0.5*sin(time*7.0 + vUv.x*18.0 + vUv.y*12.0);
+        outlineCol = mix(vec3(0.0,1.0,0.7), vec3(0.1,0.95,0.3), caustic); // cyan→acid green
+        outlineCol = mix(outlineCol, vec3(0.5,1.0,0.95), caustic * 0.3);
+        brightness = 1.5 + caustic * 0.5;
         samples = 10;
 
       } else if(s < 5.5){
-        // Regen: large green + signs floating upward, fade in at bottom, fade out at top
+        // Regen: large opaque green + signs floating upward, soft-edge halo zone
         radius = 1.8;
         outlineCol = vec3(0.2, 1.0, 0.5);
         brightness = 1.0;
         float aspect = resolution.x / resolution.y;
-        float cellSz = 0.20; // larger cells = fewer, bigger plus signs
-        float halo = nearCharacter(vUv, bgCol, 80.0);
+        float cellSz = 0.20;
+        // Soft halo gradient: full within 40px, fades to ~25% at 85px, hard 0 beyond
+        float hNear = nearCharacter(vUv, bgCol, 40.0);
+        float hFar  = nearCharacter(vUv, bgCol, 85.0);
+        float halo  = hFar * (0.25 + 0.75 * hNear);
         for(int gx = -1; gx <= 2; gx++){
           for(int gy = -2; gy <= 3; gy++){
             vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
@@ -958,30 +971,30 @@ const StatusShader = {
             vec2 center;
             center.x = (cellId.x + rx) * cellSz / aspect;
             center.y = fract((cellId.y + ry) * cellSz + time * speed);
-            // Fade in at bottom (y≈0), fade out at top (y≈1)
             float lifeFade = smoothstep(0.0, 0.18, center.y) * smoothstep(1.05, 0.68, center.y);
             vec2 d = vec2((vUv.x - center.x) * aspect, vUv.y - center.y);
-            float sz = 0.040 + hash(cellId + vec2(2.1)) * 0.014; // larger
+            float sz = 0.040 + hash(cellId + vec2(2.1)) * 0.014;
             float barW = sz * 0.28;
             float vert  = max(abs(d.x) - barW, abs(d.y) - sz);
             float horiz = max(abs(d.x) - sz,   abs(d.y) - barW);
             float dist  = min(vert, horiz);
-            float alpha = smoothstep(0.003, 0.0, dist);
-            float glow  = smoothstep(0.014, 0.0, dist) * 0.4;
-            float sparkle = 0.75 + 0.25*sin(time*4.0 + hash(cellId)*6.28);
-            extraCol  = mix(extraCol, vec3(0.15,1.0,0.4)*sparkle, alpha);
-            extraMask = max(extraMask, (alpha + glow) * sparkle * 0.5 * halo * lifeFade);
+            float alpha = smoothstep(0.003, 0.0, dist); // sharp opaque edge, no glow
+            float sparkle = 0.85 + 0.15*sin(time*4.0 + hash(cellId)*6.28);
+            extraCol  = mix(extraCol, vec3(0.1, 0.95, 0.35) * sparkle, alpha);
+            extraMask = max(extraMask, alpha * halo * lifeFade); // opaque: alpha only, no glow
           }
         }
 
       } else if(s < 6.5){
-        // Block: light-blue shield shapes drifting up, larger, fewer, fade in/out
+        // Block: opaque light-blue shields drifting up, soft-edge halo zone
         radius = 1.5;
         outlineCol = vec3(0.5, 0.85, 1.0);
         brightness = 0.9;
         float aspect = resolution.x / resolution.y;
-        float cellSz = 0.22; // fewer shields
-        float halo = nearCharacter(vUv, bgCol, 80.0);
+        float cellSz = 0.22;
+        float hNear = nearCharacter(vUv, bgCol, 40.0);
+        float hFar  = nearCharacter(vUv, bgCol, 85.0);
+        float halo  = hFar * (0.25 + 0.75 * hNear);
         for(int gx = -1; gx <= 2; gx++){
           for(int gy = -2; gy <= 3; gy++){
             vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
@@ -994,28 +1007,20 @@ const StatusShader = {
             float lifeFade = smoothstep(0.0, 0.18, center.y) * smoothstep(1.05, 0.68, center.y);
             vec2 sd = vec2((vUv.x - center.x) * aspect, vUv.y - center.y);
             float sz = 0.026 + hash(cellId + vec2(6.7)) * 0.010;
-            // Shield SDF: exploit x-symmetry → flat top + vertical sides + angled bottom-V
             float spx = abs(sd.x);
             float spy = sd.y;
             float shW = sz * 0.82;
-            float shH = sz * 0.62;   // top-to-center height
-            float tipY = sz * 1.05;  // tip below center
-            // Top rect portion
-            float rectD = max(spx - shW, spy - shH);
-            // Bottom V: at spy=-shH width=shW, at spy=-tipY width=0
-            // Inside V: spx < shW * (spy + tipY) / (tipY - shH)
-            float vNorm = clamp((spy + tipY) / (tipY - shH), 0.0, 1.0);
-            float vWidth = shW * vNorm;
-            float botVD = max(spx - vWidth, spy - (-shH)); // open below rect
-            // Union: SDF = min(top-rect, bottom-V)
-            // Top rect: closed above shH, open at bottom → max(spx-shW, spy-shH, -(spy+tipY))
-            float topD = max(spx - shW, max(spy - shH, -(spy + tipY * 0.05)));
+            float shH = sz * 0.62;
+            float tipY = sz * 1.05;
+            // Shield: top rectangle union bottom-V (exploiting x-symmetry)
+            float topD    = max(spx - shW, max(spy - shH, -(spy + tipY * 0.05)));
+            float vNorm   = clamp((spy + tipY) / (tipY - shH), 0.0, 1.0);
+            float vWidth  = shW * vNorm;
             float shieldDist = min(topD, max(spx - vWidth, spy + shH));
-            float alpha = smoothstep(0.004, -0.001, shieldDist);
-            float glow  = smoothstep(sz * 0.6, 0.0, abs(shieldDist)) * 0.3;
-            float pulse = 0.8 + 0.2*sin(time*2.0 + hash(cellId)*6.28);
-            extraCol  = mix(extraCol, vec3(0.3,0.75,1.0)*pulse, alpha);
-            extraMask = max(extraMask, (alpha + glow) * pulse * 0.5 * halo * lifeFade);
+            float alpha = smoothstep(0.004, 0.0, shieldDist); // sharp opaque, no glow
+            float pulse = 0.88 + 0.12*sin(time*2.0 + hash(cellId)*6.28);
+            extraCol  = mix(extraCol, vec3(0.3, 0.78, 1.0) * pulse, alpha);
+            extraMask = max(extraMask, alpha * halo * lifeFade); // opaque: alpha only
           }
         }
 
@@ -1027,7 +1032,7 @@ const StatusShader = {
         brightness = 1.3;
 
       } else if(s < 8.5){
-        // Weak: minus signs drifting downward, fade in at top, fade out at bottom; faint tremor outline
+        // Weak: opaque minus signs drifting downward, soft-edge halo zone
         float tremor = (hash(vec2(floor(vUv.y*120.0), floor(time*6.0)))-0.5)*0.004;
         warpedUv.x += tremor;
         radius = 1.2;
@@ -1036,7 +1041,9 @@ const StatusShader = {
         {
           float aspect = resolution.x / resolution.y;
           float cellSz = 0.20;
-          float halo = nearCharacter(vUv, bgCol, 80.0);
+          float hNear = nearCharacter(vUv, bgCol, 40.0);
+          float hFar  = nearCharacter(vUv, bgCol, 85.0);
+          float halo  = hFar * (0.25 + 0.75 * hNear);
           for(int gx = -1; gx <= 2; gx++){
             for(int gy = -2; gy <= 3; gy++){
               vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
@@ -1045,47 +1052,46 @@ const StatusShader = {
               float speed = 0.08 + hash(cellId + vec2(4.4)) * 0.06;
               vec2 center;
               center.x = (cellId.x + rx) * cellSz / aspect;
-              center.y = fract((cellId.y + ry) * cellSz - time * speed); // drift DOWNWARD
-              // Fade in at top (y≈1), fade out at bottom (y≈0)
+              center.y = fract((cellId.y + ry) * cellSz - time * speed);
               float lifeFade = smoothstep(1.0, 0.82, center.y) * smoothstep(-0.05, 0.28, center.y);
               vec2 md = vec2((vUv.x - center.x) * aspect, vUv.y - center.y);
               float msz = 0.034 + hash(cellId + vec2(8.2)) * 0.012;
-              float barH = msz * 0.18; // thin horizontal bar
+              float barH = msz * 0.18;
               float minusDist = max(abs(md.x) - msz, abs(md.y) - barH);
-              float malpha = smoothstep(0.003, 0.0, minusDist);
-              float mglow  = smoothstep(0.012, 0.0, minusDist) * 0.35;
-              float mfade  = 0.6 + 0.4 * sin(time * 2.5 + hash(cellId) * 6.28);
-              extraCol  = mix(extraCol, vec3(0.55, 0.12, 0.85) * mfade, malpha);
-              extraMask = max(extraMask, (malpha + mglow) * mfade * 0.55 * halo * lifeFade);
+              float malpha = smoothstep(0.003, 0.0, minusDist); // sharp opaque, no glow
+              float mfade  = 0.78 + 0.22 * sin(time * 2.5 + hash(cellId) * 6.28);
+              extraCol  = mix(extraCol, vec3(0.58, 0.14, 0.88) * mfade, malpha);
+              extraMask = max(extraMask, malpha * halo * lifeFade); // opaque: alpha only
             }
           }
         }
 
       } else if(s < 9.5){
-        // Frail: Voronoi hairline cracks animated from outline inward, then hold and reset
-        radius = 1.5;
-        outlineCol = vec3(0.25, 0.0, 0.4);
-        brightness = 0.5;
+        // Frail: Voronoi hairline cracks sweeping from outline inward, bright pink
+        radius = 1.8;
+        outlineCol = vec3(1.0, 0.2, 0.6); // bright pink outline
+        brightness = 0.9;
         float aspect = resolution.x / resolution.y;
         vec2 cuv = vec2(vUv.x * aspect, vUv.y) * 7.0;
         float cracks = crackLines(cuv, 1.0, time * 0.06);
-        // Compute inward-distance gradient via ringNearBg at multiple radii:
-        // Inside char, ringNearBg > 0 only where background is within that radius.
-        // Larger radius = samples pixels further away → catches more interior pixels.
-        float e4  = ringNearBg(vUv, bgCol, 4.0,  8);  // right at edge
-        float e18 = ringNearBg(vUv, bgCol, 18.0, 8);  // up to ~18px inside
-        float e45 = ringNearBg(vUv, bgCol, 45.0, 8);  // up to ~45px inside
-        // edgeProx: ~1 right at outline, decreasing toward char interior
-        float edgeProx = max(e4, max(e18 * 0.65, e45 * 0.35));
-        // Wave: 0→1 over 1.8s (cracks spread inward), then hold briefly, then reset
-        float waveT = mod(time * 0.38, 1.6);
-        float spreadFront = smoothstep(0.0, 1.0, min(waveT, 1.0));  // 0..1 as wave spreads
-        float waveFade    = smoothstep(1.6, 1.25, waveT);            // fade before reset
-        // Reveal: cracks visible where edgeProx > (1 - spreadFront)
-        float threshold  = 1.0 - spreadFront;
-        float revealMask = smoothstep(threshold + 0.12, threshold - 0.08, 1.0 - edgeProx);
-        // Dark crack color — near black with slight dark-purple tinge
-        extraCol  = mix(base.rgb * 0.08, vec3(0.03, 0.0, 0.06), 0.8);
+        // edgeProx gradient: ringNearBg inside char returns >0 when background is within radius.
+        // Pixels right at the outline: e5>0. Deeper inside: need larger radius.
+        // Adding charIn * 0.18 floor ensures all char pixels eventually get revealed.
+        float charIn = isChar(vUv, bgCol);
+        float e5  = ringNearBg(vUv, bgCol, 5.0,  8);
+        float e25 = ringNearBg(vUv, bgCol, 25.0, 8);
+        float e65 = ringNearBg(vUv, bgCol, 65.0, 8);
+        // High near outline, moderate deep inside (floored so all char pixels can reveal)
+        float edgeProx = max(charIn * 0.18, max(e5, max(e25 * 0.65, e65 * 0.35)));
+        // Wave: threshold sweeps 1→0, revealing pixels where edgeProx > threshold
+        float waveT = mod(time * 0.38, 1.8);
+        float spreadFront = smoothstep(0.0, 1.1, min(waveT, 1.1));  // 0→1 over 1.1s
+        float waveFade    = smoothstep(1.8, 1.4, waveT);             // fade before reset
+        float threshold   = 1.0 - spreadFront;                       // 1→0 as wave spreads
+        // Show cracks where edgeProx exceeds threshold (edge first, then inward)
+        float revealMask = smoothstep(threshold - 0.1, threshold + 0.1, edgeProx);
+        // Dark crack lines — near black with slight pink tinge
+        extraCol  = mix(base.rgb * 0.06, vec3(0.06, 0.0, 0.04), 0.85);
         extraMask = cracks * revealMask * waveFade * 0.92;
 
       } else if(s < 10.5){
