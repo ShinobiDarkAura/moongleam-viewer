@@ -417,6 +417,7 @@ const GROUPS = [
       'orange_female_base_walking.glb',
       'v2_enemies/elite_alt_female_tan_walking.glb',
       'v2_enemies/elite_alt_male_tan_walking.glb',
+      'v2_enemies/elite_alt_cyborg_walking.glb',
   ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Maimed-Pink-Female-Walking.glb',
@@ -694,10 +695,11 @@ const HoloShader = {
       float lum = lumG;
 
       // ── Hologram colour with chromatic split ──
+      // Use lum for shape detail but clamp minimum high so dark areas still glow
       vec3 holo = vec3(
-        holoColor.r * (lumR * 1.8 + 0.08),
-        holoColor.g * (lumG * 1.8 + 0.08),
-        holoColor.b * (lumB * 1.8 + 0.08)
+        holoColor.r * (lumR * 0.9 + 0.55),
+        holoColor.g * (lumG * 0.9 + 0.55),
+        holoColor.b * (lumB * 0.9 + 0.55)
       );
 
       // ── Scan lines (thicker, higher contrast) ──
@@ -711,16 +713,16 @@ const HoloShader = {
 
       // ── Hard flicker bursts ──
       float flicker = 0.80 + 0.20 * hash(floor(time * 18.0));
-      float bigFlicker = step(0.94, hash(floor(time * 6.0))) * 0.5; // occasional full dim
+      float bigFlicker = step(0.94, hash(floor(time * 6.0))) * 0.5;
       holo *= flicker * (1.0 - bigFlicker);
 
       // ── Edge glow (bright rim on character silhouette) ──
       float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.8;
       holo += holoColor * edgeGlow;
 
-      // ── Translucency ──
+      // ── Fixed opacity: covers entire character uniformly ──
       vec3 bg = vec3(0.039, 0.039, 0.039);
-      float opacity = clamp(lum * 0.55 + 0.10, 0.0, 0.68);
+      float opacity = 0.88; // no longer lum-dependent so dark areas get full holo
       vec3 holoBlended = mix(bg, holo, opacity);
 
       // Apply holo only where mask says character; leave bg pixels as-is
