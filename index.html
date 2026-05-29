@@ -803,82 +803,106 @@ const StatusShader = {
         brightness = 0.7 + beat * 0.8;
 
       } else if(s < 2.5){
-        // Strike: jagged electric blue/white — lots of energy
-        float row = floor(vUv.y * resolution.y / 2.0);
-        float col2 = floor(vUv.x * resolution.x / 2.0);
-        float jitterY = (hash(vec2(row, floor(time*20.0))) - 0.5) * 0.014;
-        float jitterX = (hash(vec2(col2, floor(time*18.0))) - 0.5) * 0.006;
-        warpedUv += vec2(jitterX, jitterY);
-        float spark = hash1(floor(time*30.0));
-        radius = 1.5 + spark * 5.0;
-        outlineCol = mix(vec3(0.3,0.7,1.0), vec3(1.0,1.0,1.0), spark);
-        brightness = 1.0 + spark * 1.2;
-        samples = 10;
+        // Strike: electric blue/white — toned down
+        float row = floor(vUv.y * resolution.y / 3.0);
+        float jitterX = (hash(vec2(row, floor(time*14.0))) - 0.5) * 0.007;
+        warpedUv.x += jitterX;
+        float spark = hash1(floor(time*18.0));
+        radius = 1.5 + spark * 3.0;
+        outlineCol = mix(vec3(0.3,0.7,1.0), vec3(0.8,0.95,1.0), spark);
+        brightness = 0.9 + spark * 0.7;
 
       } else if(s < 3.5){
-        // Burn: fire outline — thick ragged flames, red at base→yellow at top
-        float fireNoise = noise(vec2(vUv.x * 5.0, time * 3.0 - vUv.y * 2.0));
-        float bigWave   = sin(vUv.x * 9.0 + time * 5.0) * 0.014;
-        float smallWave = sin(vUv.x * 22.0 + time * 9.0) * 0.005;
-        warpedUv.x += bigWave + smallWave;
-        warpedUv.y -= fireNoise * 0.018 + noise(vec2(vUv.x*8.0, time*2.0)) * 0.01;
-        radius = 3.0 + fireNoise * 8.0;
-        float fireT = clamp(1.0 - vUv.y, 0.0, 1.0); // red bottom, yellow top
-        float flicker = 0.5 + 0.5*sin(time*19.0)*sin(time*7.0+vUv.x*3.0);
-        outlineCol = mix(vec3(1.0,0.6,0.0), vec3(1.0,0.05,0.0), fireT);
-        outlineCol = mix(outlineCol, vec3(1.0,1.0,0.5), fireNoise * 0.4);
-        brightness = (1.0 + flicker * 0.6) * 1.5;
+        // Burn: licking flame tongues around the outline — tall, tapered, fast
+        // Sample two noise layers scrolling upward at different speeds for organic flame shape
+        float f1 = noise(vec2(vUv.x * 6.0,  time * 5.0 - vUv.y * 3.0));
+        float f2 = noise(vec2(vUv.x * 11.0, time * 8.0 - vUv.y * 5.0 + 1.7));
+        float flameshape = f1 * 0.6 + f2 * 0.4; // combined tongue shape
+        // Warp outline detection UV sideways + upward like flames
+        float twist = sin(vUv.x * 7.0 + time * 6.0) * 0.022 + sin(vUv.x*18.0+time*11.0)*0.007;
+        warpedUv.x += twist;
+        warpedUv.y -= flameshape * 0.030 + f2 * 0.012; // tongues lick upward
+        // Radius is tall and spiky — fat at base, pointed tips
+        float spikeMult = 1.0 - clamp(vUv.y * 1.2 - 0.1, 0.0, 1.0); // taller flames lower down
+        radius = 2.0 + flameshape * 12.0 * (0.5 + spikeMult * 0.5);
+        // Red→orange at base, orange→yellow toward tips
+        float fireT = clamp(1.0 - vUv.y * 1.3, 0.0, 1.0);
+        float flicker = 0.55 + 0.45*sin(time*21.0)*sin(time*8.3+vUv.x*5.0);
+        outlineCol = mix(vec3(1.0,0.9,0.0), vec3(1.0,0.15,0.0), fireT); // yellow top → red base
+        outlineCol = mix(outlineCol, vec3(1.0,1.0,0.6), f2 * flameshape * 0.5); // hot white tips
+        brightness = (1.2 + flicker * 0.8) * 1.5;
         samples = 10;
 
       } else if(s < 4.5){
-        // Corrosion: acid — fast bubbling, neon green/yellow with toxic drips
+        // Corrosion: acid — cyan/green bubbling, caustic drips
         float bubble = noise(vec2(vUv.x * 14.0, vUv.y * 14.0 + time * 2.5));
         float drip = sin(vUv.x * 18.0) * 0.01 + noise(vec2(vUv.x*6.0, time*1.5)) * 0.015;
         warpedUv.y += drip;
         warpedUv.x += sin(vUv.y * 12.0 + time * 3.0) * 0.006;
         radius = 2.0 + bubble * 5.0;
-        float toxic = 0.5 + 0.5*sin(time*8.0 + vUv.x*20.0 + vUv.y*15.0);
-        outlineCol = mix(vec3(0.1,1.0,0.0), vec3(0.9,1.0,0.0), toxic);
-        outlineCol = mix(outlineCol, vec3(0.0,0.6,0.0), bubble * 0.3);
+        float caustic = 0.5 + 0.5*sin(time*8.0 + vUv.x*20.0 + vUv.y*15.0);
+        outlineCol = mix(vec3(0.0,1.0,0.7), vec3(0.0,0.85,0.3), caustic); // cyan→acid green
+        outlineCol = mix(outlineCol, vec3(0.5,1.0,0.9), bubble * 0.4);    // bright cyan highlights
         brightness = 1.4 + bubble * 0.6;
         samples = 10;
 
       } else if(s < 5.5){
-        // Regen: floating + signs drift upward over model surface
+        // Regen: big bright + signs floating UPWARD, unmasked (appear over and around model)
         radius = 1.8;
         outlineCol = vec3(0.2, 1.0, 0.5);
         brightness = 1.0;
-        // Draw + signs at multiple drifting positions over character
-        float cellSz = 0.07;
+        float cellSz = 0.11; // larger cells = bigger spread
         for(int gx = -1; gx <= 2; gx++){
-          for(int gy = -1; gy <= 3; gy++){
+          for(int gy = -2; gy <= 3; gy++){
             vec2 cellId = floor(vUv / cellSz) + vec2(float(gx), float(gy));
-            float rx = hash(cellId) * 0.5 + 0.25;
-            float ry = hash(cellId + vec2(17.3, 43.1)) * 0.5 + 0.25;
-            float speed = 0.18 + hash(cellId + vec2(5.0)) * 0.14;
-            vec2 center = (cellId + vec2(rx, ry)) * cellSz;
-            center.y = fract(center.y - time * speed); // drift up, wrap
+            float rx = hash(cellId) * 0.6 + 0.2;
+            float ry = hash(cellId + vec2(17.3, 43.1)) * 0.6 + 0.2;
+            float speed = 0.22 + hash(cellId + vec2(5.0)) * 0.18;
+            // Base cell position, then drift upward by adding time to y
+            vec2 center;
+            center.x = (cellId.x + rx) * cellSz;
+            float baseY = (cellId.y + ry) * cellSz;
+            center.y = fract(baseY + time * speed); // +time = moves up in UV space
             vec2 d = vUv - center;
-            float sz = 0.009 + hash(cellId + vec2(2.1)) * 0.005;
-            float barW = sz * 0.28;
-            float vert = max(abs(d.x) - barW, abs(d.y) - sz);
-            float horiz= max(abs(d.x) - sz,   abs(d.y) - barW);
-            float dist = min(vert, horiz);
-            float alpha = smoothstep(0.0015, 0.0, dist);
-            float glow  = smoothstep(0.006, 0.0, dist) * 0.4;
-            float sparkle = 0.7 + 0.3*sin(time*4.0 + hash(cellId)*6.28);
-            extraCol  = mix(extraCol, vec3(0.3,1.0,0.5)*sparkle, alpha);
+            float sz = 0.016 + hash(cellId + vec2(2.1)) * 0.008; // bigger plus signs
+            float barW = sz * 0.30;
+            float vert  = max(abs(d.x) - barW, abs(d.y) - sz);
+            float horiz = max(abs(d.x) - sz,   abs(d.y) - barW);
+            float dist  = min(vert, horiz);
+            float alpha = smoothstep(0.002, 0.0, dist);
+            float glow  = smoothstep(0.008, 0.0, dist) * 0.5;
+            float sparkle = 0.75 + 0.25*sin(time*5.0 + hash(cellId)*6.28);
+            extraCol  = mix(extraCol, vec3(0.3,1.0,0.5)*sparkle*1.4, alpha);
             extraMask = max(extraMask, (alpha + glow) * sparkle);
           }
         }
 
       } else if(s < 6.5){
-        // Block: very thick, bright solid blue — hard shield look
-        float pulse = 0.5 + 0.5*abs(sin(time*1.8));
-        radius = 6.0 + pulse * 5.0;
-        outlineCol = mix(vec3(0.3,0.6,1.0), vec3(0.7,0.9,1.0), pulse);
-        brightness = 1.5 + pulse * 1.0;
-        samples = 12;
+        // Block: floating light-blue diamond shapes drifting up, like regen but calmer
+        radius = 1.5;
+        outlineCol = vec3(0.5, 0.85, 1.0);
+        brightness = 0.9;
+        float cellSz = 0.13;
+        for(int gx = -1; gx <= 2; gx++){
+          for(int gy = -2; gy <= 3; gy++){
+            vec2 cellId = floor(vUv / cellSz) + vec2(float(gx), float(gy));
+            float rx = hash(cellId) * 0.6 + 0.2;
+            float ry = hash(cellId + vec2(9.1, 27.4)) * 0.6 + 0.2;
+            float speed = 0.10 + hash(cellId + vec2(3.3)) * 0.08; // slower than regen
+            vec2 center;
+            center.x = (cellId.x + rx) * cellSz;
+            center.y = fract((cellId.y + ry) * cellSz + time * speed);
+            vec2 d = abs(vUv - center);
+            // Diamond shape: rotate 45° = abs(x)+abs(y) < size
+            float sz = 0.010 + hash(cellId + vec2(6.7)) * 0.006;
+            float diamond = d.x + d.y; // L1 distance = diamond
+            float alpha = smoothstep(sz + 0.001, sz - 0.001, diamond);
+            float glow  = smoothstep(sz + 0.007, sz, diamond) * 0.35;
+            float pulse = 0.8 + 0.2*sin(time*2.5 + hash(cellId)*6.28);
+            extraCol  = mix(extraCol, vec3(0.5,0.85,1.0)*pulse*1.2, alpha);
+            extraMask = max(extraMask, (alpha + glow) * pulse);
+          }
+        }
 
       } else if(s < 7.5){
         // Reflect: double outline — main + fixed offset ghost
@@ -896,20 +920,28 @@ const StatusShader = {
         brightness = 0.45;
 
       } else if(s < 9.5){
-        // Frail: cracks forming/reforming on the surface
+        // Frail: dark hairline fractures spreading across the surface
         radius = 1.5;
-        outlineCol = vec3(0.5, 0.05, 0.75);
-        brightness = 0.7;
-        // Crack pattern using noise ridge detection on character surface
-        vec2 crackUv = vUv * vec2(4.0, 6.0);
-        float c1 = abs(noise(crackUv + time*0.08) - 0.5);
-        float c2 = abs(noise(crackUv * 1.7 + vec2(3.1,1.7) - time*0.06) - 0.5);
-        float c3 = abs(noise(crackUv * 0.9 + vec2(1.3,4.2) + time*0.05) - 0.5);
-        float crack = smoothstep(0.06, 0.0, min(c1, min(c2, c3)));
-        float crackGlow = smoothstep(0.12, 0.0, min(c1, min(c2, c3))) * 0.35;
-        float pulse = 0.5 + 0.5*sin(time*2.2);
-        extraCol  = vec3(0.7,0.1,1.0) * (1.0 + pulse*0.5);
-        extraMask = (crack + crackGlow) * pulse;
+        outlineCol = vec3(0.3, 0.0, 0.5);
+        brightness = 0.5;
+        // Hairline fractures: very thin ridges where noise crosses threshold
+        // Use multiple scales and orientations to get branching crack network
+        vec2 cuv = vUv * vec2(7.0, 9.0);
+        // Slowly creeping crack fronts
+        float spread = mod(time * 0.12, 1.0); // cracks spread then reset
+        float n1 = abs(noise(cuv + time*0.05) - 0.5 + spread*0.05);
+        float n2 = abs(noise(cuv * 1.4 + vec2(2.3,1.1) - time*0.04) - 0.5 + spread*0.04);
+        float n3 = abs(noise(cuv * 0.7 + vec2(0.9,3.5) + time*0.03) - 0.5 + spread*0.06);
+        float n4 = abs(noise(cuv * 2.1 + vec2(4.4,0.7) - time*0.06) - 0.5); // fine detail
+        // Very thin threshold for hairlines
+        float hair1 = smoothstep(0.035, 0.002, n1);
+        float hair2 = smoothstep(0.035, 0.002, n2);
+        float hair3 = smoothstep(0.035, 0.002, n3);
+        float hair4 = smoothstep(0.025, 0.001, n4) * 0.6; // finer secondary cracks
+        float cracks = max(max(hair1, hair2), max(hair3, hair4));
+        // Dark crack color — near black with slight dark-purple tinge
+        extraCol  = mix(base.rgb * 0.15, vec3(0.05,0.0,0.08), 0.7);
+        extraMask = cracks * 0.95;
 
       } else if(s < 10.5){
         // Leech: very fat, high-contrast undulating pink/purple — dramatic pulse
@@ -959,9 +991,10 @@ const StatusShader = {
 
       // ── Composite: outline first, then surface extras (regen/frail) ──
       vec3 col = mix(base.rgb, outlineCol * brightness, outline);
-      // Surface effects only appear over character pixels (not bg)
+      // Surface extras — regen floats freely, frail confined to character
       float charActual = isChar(vUv, bgCol);
-      col = mix(col, extraCol, extraMask * charActual);
+      float surfaceMask = (s >= 8.5 && s < 9.5) ? charActual : 1.0; // frail: char only
+      col = mix(col, extraCol, extraMask * surfaceMask);
       gl_FragColor = vec4(col, 1.0);
     }
   `,
