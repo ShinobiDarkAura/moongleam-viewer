@@ -416,6 +416,7 @@ const GROUPS = [
       'v2_enemies/elite_alt_cyborg_walking.glb',
       'base_alt_female_blue_walking.glb',
       'base_alt_male_blue_walking.glb',
+      'base_alt_male_green_walking.glb',
   ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Maimed-Pink-Female-Walking.glb',
@@ -705,11 +706,10 @@ const HoloShader = {
       float lum = lumG;
 
       // ── Hologram colour with chromatic split ──
-      // Use lum for shape detail but clamp minimum high so dark areas still glow
       vec3 holo = vec3(
-        holoColor.r * (lumR * 0.9 + 0.55),
-        holoColor.g * (lumG * 0.9 + 0.55),
-        holoColor.b * (lumB * 0.9 + 0.55)
+        holoColor.r * (lumR * 1.8 + 0.08),
+        holoColor.g * (lumG * 1.8 + 0.08),
+        holoColor.b * (lumB * 1.8 + 0.08)
       );
 
       // ── Scan lines (thicker, higher contrast) ──
@@ -730,9 +730,9 @@ const HoloShader = {
       float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.8;
       holo += holoColor * edgeGlow;
 
-      // ── Fixed opacity: covers entire character uniformly ──
+      // ── Translucency ──
       vec3 bg = vec3(0.039, 0.039, 0.039);
-      float opacity = 0.88; // no longer lum-dependent so dark areas get full holo
+      float opacity = clamp(lum * 0.55 + 0.10, 0.0, 0.68);
       vec3 holoBlended = mix(bg, holo, opacity);
 
       // Apply holo only where mask says character; leave bg pixels as-is
@@ -964,10 +964,10 @@ const StatusShader = {
         samples = 10;
 
       } else if(s < 5.5){
-        // Regen: large opaque green + signs floating upward, soft-edge halo zone
-        radius = 1.8;
-        outlineCol = vec3(0.2, 1.0, 0.5);
-        brightness = 1.0;
+        // Regen: floating plus signs only — no status outline so nothing bleeds under shapes
+        radius = 0.0;
+        outlineCol = vec3(0.0);
+        brightness = 0.0;
         float aspect = resolution.x / resolution.y;
         float cellSz = 0.20;
         // Soft halo gradient: full within 40px, fades to ~25% at 85px, hard 0 beyond
@@ -998,10 +998,10 @@ const StatusShader = {
         }
 
       } else if(s < 6.5){
-        // Block: opaque light-blue shields drifting up, soft-edge halo zone
-        radius = 1.5;
-        outlineCol = vec3(0.5, 0.85, 1.0);
-        brightness = 0.9;
+        // Block: floating shields only — no status outline so nothing bleeds under shapes
+        radius = 0.0;
+        outlineCol = vec3(0.0);
+        brightness = 0.0;
         float aspect = resolution.x / resolution.y;
         float cellSz = 0.22;
         float hNear = nearCharacter(vUv, bgCol, 40.0);
@@ -1047,9 +1047,9 @@ const StatusShader = {
         // Weak: opaque minus signs drifting downward, soft-edge halo zone
         float tremor = (hash(vec2(floor(vUv.y*120.0), floor(time*6.0)))-0.5)*0.004;
         warpedUv.x += tremor;
-        radius = 1.2;
-        outlineCol = vec3(0.45, 0.1, 0.6);
-        brightness = 0.45;
+        radius = 0.0;
+        outlineCol = vec3(0.0);
+        brightness = 0.0;
         {
           float aspect = resolution.x / resolution.y;
           float cellSz = 0.20;
