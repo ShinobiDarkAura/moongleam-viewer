@@ -414,6 +414,7 @@ const GROUPS = [
       'Maimed-Orange-Female-Walking.glb',
       'Maimed-Orange-Male-Walking.glb',
       'orange_male_base_walking.glb',
+      'orange_female_base_walking.glb',
   ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, files: [
       'Maimed-Pink-Female-Walking.glb',
@@ -759,6 +760,57 @@ const StatusShader = {
       return smoothstep(0.04, 0.16, length(texture2D(tDiffuse, uv).rgb - bgCol));
     }
 
+    // IQ two-pass Voronoi border distance — uniform-width crack lines
+    vec2 hash2v(vec2 p){
+      vec2 q = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
+      return fract(sin(q)*43758.5453);
+    }
+    float voronoiBorder(vec2 x){
+      vec2 p = floor(x);
+      vec2 f = fract(x);
+      vec2 mr, mb2;
+      float res = 8.0;
+      // Pass 1: find closest seed
+      for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+        vec2 b = vec2(float(i),float(j));
+        vec2 r = b + hash2v(p+b) - f;
+        float d = dot(r,r);
+        if(d<res){ res=d; mr=r; mb2=b; }
+      }
+      // Pass 2: true perpendicular distance to each boundary
+      res = 8.0;
+      for(int j=-2;j<=2;j++) for(int i=-2;i<=2;i++){
+        vec2 b = mb2 + vec2(float(i),float(j));
+        vec2 r = b + hash2v(p+b) - f;
+        vec2 diff = r - mr;
+        if(dot(diff,diff) > 1e-5)
+          res = min(res, dot(0.5*(mr+r), normalize(diff)));
+      }
+      return res;
+    }
+    // FBM noise for warping Voronoi UVs
+    float fbm2(vec2 p){
+      float s=0.0; float a=0.5;
+      for(int i=0;i<4;i++){ s+=a*noise(p); p*=2.0; a*=0.5; }
+      return s;
+    }
+    // Multi-scale Voronoi cracks: angular hairlines with FBM warp
+    float crackLines(vec2 uv, float baseScale, float spread){
+      // Organic warp so cells aren't perfectly regular
+      vec2 warped = uv + vec2(fbm2(uv*2.0+spread), fbm2(uv*2.0+spread+5.2)) * 0.18;
+      float cracks = 0.0;
+      float scale = baseScale;
+      float width = 0.038;
+      for(int i=0;i<4;i++){
+        float d = voronoiBorder(warped * scale);
+        float aa = fwidth(d);
+        cracks = max(cracks, 1.0 - smoothstep(width-aa, width+aa, d));
+        scale *= 1.85;
+        width *= 0.48; // finer hairlines at higher frequency
+      }
+      return cracks;
+    }
+
     // Returns 1 if within ~haloR pixels of the character silhouette
     float nearCharacter(vec2 uv, vec3 bgCol, float haloR){
       float px = haloR / resolution.x;
@@ -933,28 +985,17 @@ const StatusShader = {
         brightness = 0.45;
 
       } else if(s < 9.5){
-        // Frail: dark hairline fractures spreading across the surface
+        // Frail: IQ Voronoi-border hairline fractures — sharp, angular, dark
         radius = 1.5;
-        outlineCol = vec3(0.3, 0.0, 0.5);
+        outlineCol = vec3(0.25, 0.0, 0.4);
         brightness = 0.5;
-        // Hairline fractures: very thin ridges where noise crosses threshold
-        // Use multiple scales and orientations to get branching crack network
-        vec2 cuv = vUv * vec2(7.0, 9.0);
-        // Slowly creeping crack fronts
-        float spread = mod(time * 0.12, 1.0); // cracks spread then reset
-        float n1 = abs(noise(cuv + time*0.05) - 0.5 + spread*0.05);
-        float n2 = abs(noise(cuv * 1.4 + vec2(2.3,1.1) - time*0.04) - 0.5 + spread*0.04);
-        float n3 = abs(noise(cuv * 0.7 + vec2(0.9,3.5) + time*0.03) - 0.5 + spread*0.06);
-        float n4 = abs(noise(cuv * 2.1 + vec2(4.4,0.7) - time*0.06) - 0.5); // fine detail
-        // Very thin threshold for hairlines
-        float hair1 = smoothstep(0.035, 0.002, n1);
-        float hair2 = smoothstep(0.035, 0.002, n2);
-        float hair3 = smoothstep(0.035, 0.002, n3);
-        float hair4 = smoothstep(0.025, 0.001, n4) * 0.6; // finer secondary cracks
-        float cracks = max(max(hair1, hair2), max(hair3, hair4));
-        // Dark crack color — near black with slight dark-purple tinge
-        extraCol  = mix(base.rgb * 0.15, vec3(0.05,0.0,0.08), 0.7);
-        extraMask = cracks * 0.95;
+        float spread = time * 0.08; // slowly drifting crack pattern
+        float aspect = resolution.x / resolution.y;
+        vec2 cuv = vec2(vUv.x * aspect, vUv.y) * 7.0;
+        float cracks = crackLines(cuv, 1.0, spread);
+        // Dark crack lines — near black, slight dark-purple tinge
+        extraCol  = mix(base.rgb * 0.08, vec3(0.03, 0.0, 0.06), 0.8);
+        extraMask = cracks * 0.92;
 
       } else if(s < 10.5){
         // Leech: very fat, high-contrast undulating pink/purple — dramatic pulse
