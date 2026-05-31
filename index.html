@@ -433,6 +433,7 @@ const GROUPS = [
       'Maimed-Green-Male-Walking.glb',
       'Maimed-Orange-Female-Walking.glb',
       'Maimed-Orange-Male-Walking.glb',
+      'v2_enemies/Maimed Purple Tech.glb',
   ]},
     { heading: 'Bosses', dir: 'models', scale: 1.63, autoRotate: false, collapsed: false, files: [
       'Maimed-Pink-Female-Walking.glb',
@@ -655,7 +656,11 @@ const PixelShader = {
     varying vec2 vUv;
     void main() {
       vec2 dxy = pixelSize / resolution;
-      vec2 coord = dxy * floor(vUv / dxy);
+      // Snap to the exact centre of the nearest texel — eliminates bilinear
+      // blending between shape pixels and their neighbours, which was causing
+      // the "multiply / bleed-through" artefact on status-effect shapes.
+      vec2 blockCoord = dxy * floor(vUv / dxy);
+      vec2 coord = (floor(blockCoord * resolution) + 0.5) / resolution;
       gl_FragColor = texture2D(tDiffuse, coord);
     }`,
 };
@@ -977,20 +982,20 @@ const StatusShader = {
               float lifeFade = smoothstep(0.0, 0.14, fcenter.y) * smoothstep(1.05, 0.62, fcenter.y);
               float wiggle = sin(time * 7.0 + hash(cellId) * 6.28 + fcenter.y * 12.0) * 0.011;
               vec2 fd = vec2((vUv.x - fcenter.x + wiggle) * aspect, vUv.y - fcenter.y);
-              float fsz = (0.025 + hash(cellId + vec2(1.3)) * 0.013) * 1.70;
+              float fgate = sqrt(lifeFade * halo); // scale size → shrinks to nothing outside aura
+              float fsz = (0.025 + hash(cellId + vec2(1.3)) * 0.013) * 1.70 * fgate;
               // Lucide flame icon sampled from real SVG path texture
-              vec2 flameUV = fd / (fsz * 2.4) + 0.5;
+              vec2 flameUV = fd / (max(fsz, 0.0001) * 2.4) + 0.5;
               float flSample = (flameUV.x > 0.0 && flameUV.x < 1.0 && flameUV.y > 0.0 && flameUV.y < 1.0)
                 ? texture2D(flameIcon, flameUV).r : 0.0;
-              float fdist = step(0.5, flSample) > 0.5 ? -1.0 : 1.0; // -1=inside, +1=outside
-              float falpha = step(0.0, -fdist); // hard binary edge
+              float fdist = step(0.5, flSample) > 0.5 ? -1.0 : 1.0;
+              float falpha = step(0.0, -fdist); // binary — no fractional mask, no bleed-through
               // Red (base, low y) → orange → yellow (tip, high y)
-              float fgrad = clamp((fd.y + fsz * 0.5) / (fsz * 2.2), 0.0, 1.0);
+              float fgrad = clamp((fd.y + fsz * 0.5) / max(fsz * 2.2, 0.0001), 0.0, 1.0);
               vec3 fCol = mix(vec3(1.0, 0.02, 0.0), mix(vec3(1.0,0.5,0.0), vec3(1.0,0.92,0.0), fgrad*2.0-0.5), fgrad);
               float fflicker = 0.68 + 0.32 * sin(time * 14.0 + hash(cellId) * 6.28);
-              float fgate = lifeFade * halo;
-              extraCol  = mix(extraCol, fCol * fflicker * fgate, falpha);
-              extraMask = max(extraMask, falpha * fgate);
+              extraCol  = mix(extraCol, fCol * fflicker, falpha);
+              extraMask = max(extraMask, falpha); // binary — size=0 outside aura so falpha=0 there
             }
           }
         }
@@ -1035,17 +1040,16 @@ const StatusShader = {
             center.y = fract((cellId.y + ry) * cellSz + time * speed);
             float lifeFade = smoothstep(0.0, 0.18, center.y) * smoothstep(1.05, 0.68, center.y);
             vec2 d = vec2((vUv.x - center.x) * aspect, vUv.y - center.y);
-            float sz = 0.040 + hash(cellId + vec2(2.1)) * 0.014;
+            float gate = sqrt(lifeFade * halo); // shrink size → no shape outside aura
+            float sz = (0.040 + hash(cellId + vec2(2.1)) * 0.014) * gate;
             float barW = sz * 0.28;
             float vert  = max(abs(d.x) - barW, abs(d.y) - sz);
             float horiz = max(abs(d.x) - sz,   abs(d.y) - barW);
             float dist  = min(vert, horiz);
-            float alpha = step(0.0, -dist); // hard binary edge — no sub-1 bleed-through
+            float alpha = step(0.0, -dist); // binary — size=0 outside aura so alpha=0 there
             float sparkle = 0.85 + 0.15*sin(time*4.0 + hash(cellId)*6.28);
-            // lifeFade darkens color toward 0 rather than making mask transparent
-            float fade = lifeFade * halo;
-            extraCol  = mix(extraCol, vec3(0.1, 0.95, 0.35) * sparkle * fade, alpha);
-            extraMask = max(extraMask, alpha * fade);
+            extraCol  = mix(extraCol, vec3(0.1, 0.95, 0.35) * sparkle, alpha);
+            extraMask = max(extraMask, alpha);
           }
         }
 
@@ -1064,23 +1068,22 @@ const StatusShader = {
             vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
             float rx = 0.2 + hash(cellId) * 0.6;
             float ry = 0.2 + hash(cellId + vec2(9.1, 27.4)) * 0.6;
-            float speed = 0.06 + hash(cellId + vec2(3.3)) * 0.04;
+            float speed = (0.06 + hash(cellId + vec2(3.3)) * 0.04) * 1.25;
             vec2 center;
             center.x = (cellId.x + rx) * cellSz / aspect;
             center.y = fract((cellId.y + ry) * cellSz + time * speed);
             float lifeFade = smoothstep(0.0, 0.18, center.y) * smoothstep(1.05, 0.68, center.y);
             vec2 sd = vec2((vUv.x - center.x) * aspect, vUv.y - center.y);
-            // Lucide shield icon sampled from real SVG path texture — 1.5× size
-            float sz = (0.026 + hash(cellId + vec2(6.7)) * 0.010) * 2.55;
-            // Map local offset to icon UV: icon spans sz*2.2 in width/height, centred
-            vec2 iconUV = sd / (sz * 2.2) + 0.5;
+            // Shrink size to zero outside aura — keeps mask binary, no bleed-through
+            float gate = sqrt(lifeFade * halo);
+            float sz = (0.026 + hash(cellId + vec2(6.7)) * 0.010) * 2.04 * gate; // 2.55 * 0.8
+            vec2 iconUV = sd / (max(sz, 0.0001) * 2.2) + 0.5;
             float shSample = (iconUV.x > 0.0 && iconUV.x < 1.0 && iconUV.y > 0.0 && iconUV.y < 1.0)
               ? texture2D(shieldIcon, iconUV).r : 0.0;
-            float alpha = step(0.5, shSample);
+            float alpha = step(0.5, shSample); // binary — size=0 outside aura so alpha=0 there
             float pulse = 0.88 + 0.12*sin(time*2.0 + hash(cellId)*6.28);
-            float fade = lifeFade * halo;
-            extraCol  = mix(extraCol, vec3(0.3, 0.78, 1.0) * pulse * fade, alpha);
-            extraMask = max(extraMask, alpha * fade);
+            extraCol  = mix(extraCol, vec3(0.0, 1.0, 1.0) * pulse, alpha); // cyan
+            extraMask = max(extraMask, alpha);
           }
         }
 
@@ -1115,14 +1118,14 @@ const StatusShader = {
               center.y = fract((cellId.y + ry) * cellSz - time * speed);
               float lifeFade = smoothstep(1.0, 0.82, center.y) * smoothstep(-0.05, 0.28, center.y);
               vec2 md = vec2((vUv.x - center.x) * aspect, vUv.y - center.y);
-              float msz = 0.034 + hash(cellId + vec2(8.2)) * 0.012;
-              float barH = msz * 0.225; // 25% thicker than original 0.18
+              float mgate = sqrt(lifeFade * halo); // shrink to nothing outside aura
+              float msz = (0.034 + hash(cellId + vec2(8.2)) * 0.012) * mgate;
+              float barH = msz * 0.225;
               float minusDist = max(abs(md.x) - msz, abs(md.y) - barH);
-              float malpha = step(0.0, -minusDist); // hard binary edge
+              float malpha = step(0.0, -minusDist); // binary — size=0 outside aura so malpha=0 there
               float mfade  = 0.78 + 0.22 * sin(time * 2.5 + hash(cellId) * 6.28);
-              float mvis = lifeFade * halo;
-              extraCol  = mix(extraCol, vec3(0.58, 0.14, 0.88) * mfade * mvis, malpha);
-              extraMask = max(extraMask, malpha * mvis);
+              extraCol  = mix(extraCol, vec3(0.58, 0.14, 0.88) * mfade, malpha);
+              extraMask = max(extraMask, malpha);
             }
           }
         }
@@ -1215,7 +1218,8 @@ const statusPass = new ShaderPass(StatusShader);
 statusPass.enabled = false;
 
 // ── Insert holo + status into composer RIGHT AFTER outline (bg is still ~#0a0a0a here) ──
-composer.passes.splice(2, 0, holoPass, statusPass);
+composer.passes.splice(2, 0, holoPass);       // holo before gamma (needs linear light)
+composer.passes.splice(6, 0, statusPass);     // status after pixel — shapes skip gamma+brightness blowout
 
 // Status metadata: label, outline colour, base tint for color filter
 const STATUS_META = [
