@@ -785,28 +785,50 @@ const HoloShader = {
       vec4 baseRaw = texture2D(tDiffuse, vUv);
 
       // ── Soft silhouette mask ──────────────────────────────────────────────
-      // Blur the background-difference over a small neighbourhood, then apply a
-      // WIDE smoothstep. The blur removes the jagged/pixelated edges and the wide
-      // ramp lets darker areas stay partly translucent — so transparent spots
-      // fade gently at their edges instead of cutting harshly.
-      vec2 sx = vec2(2.6 / resolution.x, 0.0);
-      vec2 sy = vec2(0.0, 2.6 / resolution.y);
-      float diff = diffAt(vUv, bgCol) * 0.36
-                 + (diffAt(vUv + sx, bgCol) + diffAt(vUv - sx, bgCol)
-                  + diffAt(vUv + sy, bgCol) + diffAt(vUv - sy, bgCol)) * 0.16;
-      float mask = smoothstep(0.012, 0.11, diff);
+      // Heavily blur the background-difference (9-tap) so the INTERIOR mask is
+      // smooth and uniform — this is what kills the bright speckle on busy models
+      // (the per-pixel alpha noise came from the mask swinging between bright gear
+      // and dark crevices). Face/feature detail is NOT lost: it comes from the
+      // colour shading below, not the mask. The blur also keeps edges soft.
+      // Wide 13-tap blur (radii ~5px & ~9px, well past the 4.5px PS1 blocks) so
+      // scattered bright highlights average into the surrounding cloth instead of
+      // surviving as opaque speckle dots.
+      float ra = 5.0 / resolution.x, rb = 5.0 / resolution.y;
+      float rc = 9.0 / resolution.x, rd = 9.0 / resolution.y;
+      float diff = diffAt(vUv, bgCol) * 0.16
+        + ( diffAt(vUv + vec2(ra, 0.0), bgCol) + diffAt(vUv - vec2(ra, 0.0), bgCol)
+          + diffAt(vUv + vec2(0.0, rb), bgCol) + diffAt(vUv - vec2(0.0, rb), bgCol) ) * 0.11
+        + ( diffAt(vUv + vec2(ra,  rb), bgCol) + diffAt(vUv - vec2(ra, rb), bgCol)
+          + diffAt(vUv + vec2(ra, -rb), bgCol) + diffAt(vUv + vec2(-ra, rb), bgCol) ) * 0.06
+        + ( diffAt(vUv + vec2(rc, 0.0), bgCol) + diffAt(vUv - vec2(rc, 0.0), bgCol)
+          + diffAt(vUv + vec2(0.0, rd), bgCol) + diffAt(vUv - vec2(0.0, rd), bgCol) ) * 0.04;
+      // Wider ramp → the silhouette edge is a smooth gradient, not a noisy
+      // near-binary boundary (that boundary wobble was the edge static). The
+      // hole-fill below forces the interior solid, so edge glow still won't fire
+      // inside — only at this soft outer ramp.
+      float mask = smoothstep(0.006, 0.05, diff);
 
-      // ── Horizontal glitch bands ──
+      // Fill interior holes (dark crevices that survive the blur). A pixel
+      // enclosed by figure on BOTH axes is interior → set solid, so neither the
+      // edge glow nor the alpha speckles inside. Open gaps (legs) stay open.
+      float gx = 7.0 / resolution.x, gy = 7.0 / resolution.y;
+      float encH = min(smoothstep(0.008, 0.022, diffAt(vUv - vec2(gx, 0.0), bgCol)),
+                       smoothstep(0.008, 0.022, diffAt(vUv + vec2(gx, 0.0), bgCol)));
+      float encV = min(smoothstep(0.008, 0.022, diffAt(vUv - vec2(0.0, gy), bgCol)),
+                       smoothstep(0.008, 0.022, diffAt(vUv + vec2(0.0, gy), bgCol)));
+      mask = max(mask, min(encH, encV));
+
+      // ── Horizontal glitch bands ── (slower + far fewer → less distracting)
       float bandRow  = floor(vUv.y * 80.0);
-      float bandTime = floor(time * 12.0);
+      float bandTime = floor(time * 5.0);
       float trigger  = hash(bandRow * 127.1 + bandTime * 311.7);
-      float isGlitch = step(0.80, trigger) * mask;
+      float isGlitch = step(0.93, trigger) * mask;
       float glitchAmt = (hash(bandRow * 92.3 + bandTime * 17.0) - 0.5) * 0.18 * isGlitch;
 
-      // ── Large tear / full-row displacement ──
+      // ── Large tear / full-row displacement ── (rare)
       float tearRow  = floor(vUv.y * 20.0);
-      float tearTime = floor(time * 5.0);
-      float tearTrig = step(0.92, hash(tearRow * 53.1 + tearTime * 79.3)) * mask;
+      float tearTime = floor(time * 2.5);
+      float tearTrig = step(0.97, hash(tearRow * 53.1 + tearTime * 79.3)) * mask;
       float tearAmt  = (hash(tearRow + tearTime) - 0.5) * 0.28 * tearTrig;
 
       // ── Chromatic aberration on glitch ──
@@ -817,7 +839,7 @@ const HoloShader = {
       float lumB = dot(texture2D(tDiffuse, uv - vec2( aberr, 0.0)).rgb, LW);
 
       // ── Internal surface detail, normalised 0..1 within the figure ──
-      // Drives the brightness variation across the ghost (folds, highlights).
+      // Sampled crisp (no blur) so interior features stay sharp.
       float detail = clamp((lumG - bgLum) / max(1.0 - bgLum, 0.001), 0.0, 1.0);
 
       // ── Scanlines — low frequency so they survive the upstream pixelation ──
@@ -825,60 +847,42 @@ const HoloShader = {
       float scan = 0.5 + 0.5 * sin(vUv.y * 130.0 - time * 5.0);
       scan = smoothstep(0.35, 0.75, scan);
 
-      // ── Single bright wipe bar sweeping upward, looping ──
-      float barPos   = fract(time * 0.22);                    // 0→1 bottom→top
-      float barDist  = abs(vUv.y - barPos);
-      float wipeBar  = smoothstep(0.08, 0.0, barDist);         // soft band
-      wipeBar       += smoothstep(0.02, 0.0, barDist) * 0.7;   // hot core
-
-      // ── Instability: rolling wave + per-row flicker bursts ──
-      float roll       = 0.9 + 0.1 * sin(vUv.y * 4.0 - time * 2.2);
-      float flicker    = 0.9 + 0.1 * hash(floor(time * 18.0));
-      float bigFlicker = step(0.96, hash(floor(time * 6.0))) * 0.35;
+      // ── Instability: rolling wave + per-row flicker (slower, gentler) ──
+      float roll       = 0.92 + 0.08 * sin(vUv.y * 4.0 - time * 2.2);
+      float flicker    = 0.94 + 0.06 * hash(floor(time * 9.0));
+      float bigFlicker = step(0.985, hash(floor(time * 4.0))) * 0.25;  // rare dropout
       float instab     = roll * flicker * (1.0 - bigFlicker);
 
-      // ── Global flicker: the whole projection pulses / stutters as one unit ──
-      float gFlick = 0.78 + 0.22 * hash(floor(time * 22.0));
-      gFlick *= 1.0 - step(0.92, hash(floor(time * 10.0) + 7.0)) * 0.5; // brief dropouts
-      gFlick  = mix(1.0, gFlick, 0.9);             // lively, but never strobes fully black
+      // ── Global flicker: whole projection pulses (slower, subtler) ──
+      float gFlick = 0.86 + 0.14 * hash(floor(time * 12.0));
+      gFlick *= 1.0 - step(0.96, hash(floor(time * 6.0) + 7.0)) * 0.3;  // rare brief dropout
+      gFlick  = mix(1.0, gFlick, 0.6);             // subtle, never strobes
 
-      // ── Edge / Fresnel rim glow on the silhouette ──
-      float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.6;
-
-      // ── Outer glow: soft holographic halo around the whole model ──
-      float halo = 0.0;
-      for(int i = 0; i < 8; i++){
-        float a = float(i) * 0.7853982;            // 45° steps around the pixel
-        vec2 dir = vec2(cos(a), sin(a));
-        vec2 r1 = dir * vec2( 8.0 / resolution.x,  8.0 / resolution.y);
-        vec2 r2 = dir * vec2(18.0 / resolution.x, 18.0 / resolution.y);
-        halo = max(halo, smoothstep(0.012, 0.11, diffAt(vUv + r1, bgCol)));
-        halo = max(halo, smoothstep(0.012, 0.11, diffAt(vUv + r2, bgCol)) * 0.55);
-      }
-      float outerGlow = clamp(halo - mask, 0.0, 1.0); // ring just outside the figure
-
-      // ── Opacity: body translucent, head & hands (bright skin) stay opaque ──
-      // Skin reads as high luminance (detail≈1); dark clothing reads low → faint.
-      float solidity  = smoothstep(0.34, 0.72, detail);  // 0 = cloth, 1 = skin
-      float bodyAlpha = mix(0.28, 0.96, solidity);
-      float alpha = mask * bodyAlpha * (0.72 + 0.28 * scan);
-      alpha += mask * wipeBar * 0.5;               // sweep solidifies as it passes
-      alpha *= instab * gFlick;                    // whole figure flickers
-      alpha = clamp(alpha + edgeGlow, 0.0, 1.0);
+      // ── Opacity: uniform translucency across the whole figure ──
+      // No bar-led selective transparency, no edge/Fresnel outline.
+      float alpha = mask * 0.85 * (0.9 + 0.1 * scan);
+      alpha *= instab * gFlick;
+      alpha = clamp(alpha, 0.0, 1.0);
 
       // ── Holographic emission colour (single hue + chromatic fringe) ──
-      float shade = 0.85 + 0.3 * detail;
+      // Asymmetric curve: pow() deepens the darks (high contrast on interior
+      // shadows/eyes/mouth) while the ceiling stays compressed so bright
+      // highlights don't blow out.
+      float dShape = pow(detail, 1.5);
+      float shade = mix(0.20, 1.25, dShape);
       vec3 holo = holoColor * shade;
-      holo.r += (lumR - lumG) * 0.5;               // subtle chromatic fringe
-      holo.b += (lumB - lumG) * 0.5;
-      holo += holoColor * wipeBar * 0.9;           // bar brightens its hue
-      holo += vec3(0.8, 0.95, 1.0) * edgeGlow;     // near-white hot rim
+      holo.r += (lumR - lumG) * 0.22;              // subtle chromatic fringe
+      holo.b += (lumB - lumG) * 0.22;
+
+      // ── Thin, quick scan bar sweeping upward, looping (brightness only) ──
+      // float scanBarPos = fract(time * 0.26);                       // brisk upward loop
+      // float scanBar    = smoothstep(0.022, 0.0, abs(vUv.y - scanBarPos)); // thin band
+      // holo += holoColor * scanBar * 0.8;           // brighten its hue as it passes
       holo = max(holo, 0.0);
 
       // ── Composite: fade between background and the ghost ──
+      // float a = clamp(alpha + scanBar * mask * 0.12, 0.0, 1.0); // slight solidify on the bar
       vec3 col = mix(bgCol, holo, alpha);
-      // Soft halo around the whole model, pulsing with the global flicker.
-      col += holoColor * outerGlow * 0.5 * gFlick;
 
       gl_FragColor = vec4(col, 1.0);
     }
