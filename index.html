@@ -552,13 +552,13 @@ const GROUPS = [
       'Neutral-Male.glb',
     ]},
     { heading: 'BASE ALTS', dir: 'models', scale: 1.63, autoRotate: false, collapsed: false, files: [
-      'purple_long_coat_female_walking.glb',
       'Maimed Purple Tech.glb',
       'Maimed Red Combat.glb',
       'Maimed Pink Tactical.glb',
       'Maimed Blue Tactical.glb',
       'Maimed Green Heavy.glb',
       'Maimed Orange Tech.glb',
+      'purple_long_coat_female_walking.glb',
       'Maimed Blue Female.glb',
       'Maimed Green Female.glb',
       'Maimed Orange Female.glb',
@@ -566,13 +566,13 @@ const GROUPS = [
       'Maimed Purple Female.glb',
       'Maimed Red Female.glb',
     ], labels: [
-      'Base Alt Female 1',
       'Base Alt Male 1',
       'Base Alt Male 2',
       'Base Alt Male 3',
       'Base Alt Male 4',
       'Base Alt Male 5',
       'Base Alt Male 6',
+      'Base Alt Female 1',
       'Base Alt Female 2',
       'Base Alt Female 3',
       'Base Alt Female 4',
@@ -757,24 +757,44 @@ composer.addPass(posterizePass);
 // ── Hologram pass ────────────────────────────────────────────────────────────
 const HoloShader = {
   uniforms: {
-    tDiffuse:  { value: null },
-    time:      { value: 0.0 },
-    holoColor: { value: new THREE.Color(0x44ff88) },
+    tDiffuse:   { value: null },
+    time:       { value: 0.0 },
+    holoColor:  { value: new THREE.Color(0x40d8ff) }, // iconic holographic cyan
+    resolution: { value: new THREE.Vector2(800, 600) },
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader: `
     uniform sampler2D tDiffuse;
     uniform float time;
     uniform vec3 holoColor;
+    uniform vec2 resolution;
     varying vec2 vUv;
 
     float hash(float n){ return fract(sin(n)*43758.5453); }
 
+    // Raw silhouette difference from the background colour (un-thresholded).
+    float diffAt(vec2 uv, vec3 bgCol){
+      return length(texture2D(tDiffuse, uv).rgb - bgCol);
+    }
+
     void main(){
-      vec4 baseRaw = texture2D(tDiffuse, vUv);
+      const vec3 LW = vec3(0.299, 0.587, 0.114);
       // Sample a corner pixel as the true background reference
       vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
-      float mask = smoothstep(0.04, 0.14, length(baseRaw.rgb - bgCol));
+      float bgLum = dot(bgCol, LW);
+      vec4 baseRaw = texture2D(tDiffuse, vUv);
+
+      // ── Soft silhouette mask ──────────────────────────────────────────────
+      // Blur the background-difference over a small neighbourhood, then apply a
+      // WIDE smoothstep. The blur removes the jagged/pixelated edges and the wide
+      // ramp lets darker areas stay partly translucent — so transparent spots
+      // fade gently at their edges instead of cutting harshly.
+      vec2 sx = vec2(2.6 / resolution.x, 0.0);
+      vec2 sy = vec2(0.0, 2.6 / resolution.y);
+      float diff = diffAt(vUv, bgCol) * 0.36
+                 + (diffAt(vUv + sx, bgCol) + diffAt(vUv - sx, bgCol)
+                  + diffAt(vUv + sy, bgCol) + diffAt(vUv - sy, bgCol)) * 0.16;
+      float mask = smoothstep(0.012, 0.11, diff);
 
       // ── Horizontal glitch bands ──
       float bandRow  = floor(vUv.y * 80.0);
@@ -792,44 +812,55 @@ const HoloShader = {
       // ── Chromatic aberration on glitch ──
       float aberr = (glitchAmt + tearAmt) * 0.4;
       vec2 uv = vec2(vUv.x + glitchAmt + tearAmt, vUv.y);
-      float lumR = dot(texture2D(tDiffuse, uv + vec2( aberr, 0.0)).rgb, vec3(0.299,0.587,0.114));
-      float lumG = dot(texture2D(tDiffuse, uv).rgb,                      vec3(0.299,0.587,0.114));
-      float lumB = dot(texture2D(tDiffuse, uv - vec2( aberr, 0.0)).rgb, vec3(0.299,0.587,0.114));
-      vec4 base = texture2D(tDiffuse, uv);
-      float lum = lumG;
+      float lumR = dot(texture2D(tDiffuse, uv + vec2( aberr, 0.0)).rgb, LW);
+      float lumG = dot(texture2D(tDiffuse, uv).rgb,                     LW);
+      float lumB = dot(texture2D(tDiffuse, uv - vec2( aberr, 0.0)).rgb, LW);
 
-      // ── Hologram colour with chromatic split ──
-      vec3 holo = vec3(
-        holoColor.r * (lumR * 1.8 + 0.08),
-        holoColor.g * (lumG * 1.8 + 0.08),
-        holoColor.b * (lumB * 1.8 + 0.08)
-      );
+      // ── Internal surface detail, normalised 0..1 within the figure ──
+      // Drives the brightness variation across the ghost (folds, highlights).
+      float detail = clamp((lumG - bgLum) / max(1.0 - bgLum, 0.001), 0.0, 1.0);
 
-      // ── Scan lines (thicker, higher contrast) ──
-      float scan = 0.55 + 0.45 * sin(vUv.y * 180.0 + time * 5.0);
-      scan = pow(scan, 1.5);
-      holo *= scan;
+      // ── Scanlines — low frequency so they survive the upstream pixelation ──
+      // Gaps drop toward 0 (see-through); lines stay bright. Sharp, even bands.
+      float scan = 0.5 + 0.5 * sin(vUv.y * 130.0 - time * 5.0);
+      scan = smoothstep(0.35, 0.75, scan);
 
-      // ── Rolling brightness wave (more dramatic) ──
-      float roll = 0.72 + 0.28 * sin(vUv.y * 4.0 - time * 2.2);
-      holo *= roll;
+      // ── Single bright wipe bar sweeping upward, looping ──
+      float barPos   = fract(time * 0.22);                    // 0→1 bottom→top
+      float barDist  = abs(vUv.y - barPos);
+      float wipeBar  = smoothstep(0.08, 0.0, barDist);         // soft band
+      wipeBar       += smoothstep(0.02, 0.0, barDist) * 0.7;   // hot core
 
-      // ── Hard flicker bursts ──
-      float flicker = 0.80 + 0.20 * hash(floor(time * 18.0));
-      float bigFlicker = step(0.94, hash(floor(time * 6.0))) * 0.5;
-      holo *= flicker * (1.0 - bigFlicker);
+      // ── Instability: rolling wave + flicker bursts ──
+      float roll       = 0.9 + 0.1 * sin(vUv.y * 4.0 - time * 2.2);
+      float flicker    = 0.9 + 0.1 * hash(floor(time * 18.0));
+      float bigFlicker = step(0.96, hash(floor(time * 6.0))) * 0.35;
+      float instab     = roll * flicker * (1.0 - bigFlicker);
 
-      // ── Edge glow (bright rim on character silhouette) ──
-      float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.8;
-      holo += holoColor * edgeGlow;
+      // ── Edge / Fresnel rim glow on the silhouette ──
+      float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.6;
 
-      // ── Translucency ──
-      vec3 bg = vec3(0.039, 0.039, 0.039);
-      float opacity = clamp(lum * 0.55 + 0.10, 0.0, 0.68);
-      vec3 holoBlended = mix(bg, holo, opacity);
+      // ── Opacity: translucent ghost with gentle scanline see-through ──
+      // Lower base fill brings the translucency back; the wide soft mask keeps
+      // transparent areas faded rather than harsh. The wipe bar solidifies the
+      // figure as it passes.
+      float alpha = mask * (0.62 + 0.38 * scan);
+      alpha += mask * wipeBar * 0.5;               // sweep solidifies as it passes
+      alpha *= instab;
+      alpha = clamp(alpha + edgeGlow, 0.0, 1.0);
 
-      // Apply holo only where mask says character; leave bg pixels as-is
-      vec3 col = mix(base.rgb, holoBlended, mask);
+      // ── Holographic emission colour (single hue + chromatic fringe) ──
+      float shade = 0.85 + 0.3 * detail;
+      vec3 holo = holoColor * shade;
+      holo.r += (lumR - lumG) * 0.5;               // subtle chromatic fringe
+      holo.b += (lumB - lumG) * 0.5;
+      holo += holoColor * wipeBar * 0.9;           // bar brightens its hue
+      holo += vec3(0.8, 0.95, 1.0) * edgeGlow;     // near-white hot rim
+      holo = max(holo, 0.0);
+
+      // ── Composite: fade between background and the ghost ──
+      // Where alpha→0 (the bar) the pixel IS the background — genuine transparency.
+      vec3 col = mix(bgCol, holo, alpha);
 
       gl_FragColor = vec4(col, 1.0);
     }
@@ -1340,9 +1371,12 @@ const StatusShader = {
 const statusPass = new ShaderPass(StatusShader);
 statusPass.enabled = false;
 
-// ── Insert holo + status into composer RIGHT AFTER outline (bg is still ~#0a0a0a here) ──
-composer.passes.splice(2, 0, holoPass);       // holo before gamma (needs linear light)
-composer.passes.splice(6, 0, statusPass);     // status after pixel — shapes skip gamma+brightness blowout
+// ── Insert holo + status at the END of the look chain ──
+// Order becomes: Render, outline, gamma, brightness, pixel, holo, status, posterize.
+// Holo runs AFTER brightness so its translucency (fade-to-background) is the final
+// word and isn't re-saturated by the ×2.53 brightness multiply.
+composer.passes.splice(5, 0, holoPass);       // holo after pixel — owns the final look
+composer.passes.splice(6, 0, statusPass);     // status on top of holo, before posterize
 
 // Status metadata: label, outline colour, base tint for color filter
 const STATUS_META = [
@@ -1686,8 +1720,8 @@ if (defaultItem) defaultItem.click();
 document.getElementById('colorPicker').addEventListener('change', e => {
   currentColorKey = e.target.value;
   applyTint(currentColorKey);
-  const p = PALETTE[currentColorKey];
-  if (p.color) holoPass.uniforms.holoColor.value.copy(p.color);
+  // Holo keeps its own signature cyan — independent of the model tint, so the
+  // hologram reads as a hologram regardless of which palette colour is active.
 });
 
 document.getElementById('intensity').addEventListener('input', e => {
@@ -1712,6 +1746,10 @@ document.getElementById('ps1Toggle').addEventListener('change', e => {
 document.getElementById('holoToggle').addEventListener('change', e => {
   holoPass.enabled = e.target.checked;
   document.getElementById('holoWrap').classList.toggle('active', e.target.checked);
+  // Hide the ground shadow while the hologram is active — projections don't cast shadows.
+  ground.visible = !e.target.checked;
+  // Refresh the background tint (holo cyan when on, palette colour when off).
+  applyTint(currentColorKey);
 });
 
 document.getElementById('statusPicker').addEventListener('change', e => {
@@ -1724,8 +1762,6 @@ document.getElementById('statusPicker').addEventListener('change', e => {
     currentColorKey = meta.color;
     document.getElementById('colorPicker').value = meta.color;
     applyTint(meta.color);
-    const p = PALETTE[meta.color];
-    if (p.color) holoPass.uniforms.holoColor.value.copy(p.color);
   }
 });
 
@@ -1805,6 +1841,7 @@ function resize() {
   const pr = renderer.getPixelRatio();
   pixelPass.uniforms.resolution.value.set(w * pr, h * pr);
   statusPass.uniforms.resolution.value.set(w * pr, h * pr);
+  holoPass.uniforms.resolution.value.set(w * pr, h * pr);
 }
 new ResizeObserver(resize).observe(document.getElementById('viewport'));
 resize();
