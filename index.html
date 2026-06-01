@@ -318,6 +318,30 @@
       color: #333;
       pointer-events: none;
     }
+
+    #downloadBtn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: #1a1a1a;
+      color: #888;
+      border: 1px solid #333;
+      padding: 8px 14px;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.12s, border-color 0.12s, background 0.12s;
+    }
+    #downloadBtn:hover { color: #44ff88; border-color: #44ff88; background: #141414; }
+    #downloadBtn:active { background: #222; }
+    #downloadBtn:disabled { opacity: 0.4; cursor: default; color: #555; border-color: #2a2a2a; }
+    #downloadBtn:disabled:hover { color: #555; border-color: #2a2a2a; background: #1a1a1a; }
+    #downloadBtn .dl-arrow { font-size: 13px; line-height: 1; }
   </style>
 </head>
 <body>
@@ -390,6 +414,9 @@
     <canvas id="canvas"></canvas>
     <div id="loading">SELECT A CHARACTER</div>
     <div id="model-name"></div>
+    <button id="downloadBtn" title="Download rigged GLB">
+      <span class="dl-arrow">↓</span> DOWNLOAD GLB
+    </button>
   </div>
 </main>
 
@@ -834,6 +861,33 @@ const LUCIDE_FLAME  = 'M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 
 const shieldIconTex = makeLucideTexture(LUCIDE_SHIELD);
 const flameIconTex  = makeLucideTexture(LUCIDE_FLAME);
 
+// Skull (acid/corrosion) — filled silhouette with eyes + nose punched out via evenodd
+function makeSkullTexture(size = 128) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, size, size);
+  ctx.save();
+  ctx.scale(size / 24, size / 24);
+  const p = new Path2D();
+  // Lucide "skull" head + jaw outline
+  p.addPath(new Path2D('M15 22a1 1 0 0 0 1-1v-1a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20v1a1 1 0 0 0 1 1z'));
+  // Eye sockets (holes, enlarged so they read at small size)
+  p.moveTo(16.6, 12); p.arc(15, 12, 1.6, 0, Math.PI * 2);
+  p.moveTo(10.6, 12); p.arc(9,  12, 1.6, 0, Math.PI * 2);
+  // Nose cavity (hole)
+  p.addPath(new Path2D('M12 14.4 13 16.6 11 16.6 z'));
+  ctx.fillStyle = 'white';
+  ctx.fill(p, 'evenodd');
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+const skullIconTex = makeSkullTexture();
+
 const StatusShader = {
   uniforms: {
     tDiffuse:   { value: null },
@@ -842,6 +896,7 @@ const StatusShader = {
     resolution: { value: new THREE.Vector2(800, 600) },
     shieldIcon: { value: shieldIconTex },
     flameIcon:  { value: flameIconTex },
+    skullIcon:  { value: skullIconTex },
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader: `
@@ -851,6 +906,7 @@ const StatusShader = {
     uniform vec2 resolution;
     uniform sampler2D shieldIcon;
     uniform sampler2D flameIcon;
+    uniform sampler2D skullIcon;
     varying vec2 vUv;
 
     float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -1052,6 +1108,38 @@ const StatusShader = {
         outlineCol = mix(outlineCol, vec3(0.5,1.0,0.95), caustic * 0.3);
         brightness = 1.5 + caustic * 0.5;
         samples = 10;
+        // Skull icon sprites drifting upward (like burn flames) — acid green
+        {
+          float aspect = resolution.x / resolution.y;
+          float cellSz = 0.22;
+          float hNear = nearCharacter(vUv, bgCol, 40.0);
+          float hFar  = nearCharacter(vUv, bgCol, 85.0);
+          float halo  = hFar * (0.25 + 0.75 * hNear);
+          for(int gx = -1; gx <= 2; gx++){
+            for(int gy = -2; gy <= 3; gy++){
+              vec2 cellId = floor(vec2(vUv.x * aspect, vUv.y) / cellSz) + vec2(float(gx), float(gy));
+              float rx = 0.2 + hash(cellId + vec2(41.2)) * 0.6;
+              float ry = 0.2 + hash(cellId + vec2(13.9, 88.1)) * 0.6;
+              float spd = 0.09 + hash(cellId + vec2(5.0)) * 0.06;
+              vec2 kcenter;
+              kcenter.x = (cellId.x + rx) * cellSz / aspect;
+              kcenter.y = fract((cellId.y + ry) * cellSz + time * spd);
+              float lifeFade = smoothstep(0.0, 0.14, kcenter.y) * smoothstep(1.05, 0.62, kcenter.y);
+              float wobble = sin(time * 3.0 + hash(cellId) * 6.28 + kcenter.y * 8.0) * 0.010;
+              vec2 kd = vec2((vUv.x - kcenter.x + wobble) * aspect, vUv.y - kcenter.y);
+              float kgate = sqrt(lifeFade * halo); // shrink to nothing outside aura
+              float ksz = (0.024 + hash(cellId + vec2(2.7)) * 0.012) * 1.85 * kgate;
+              vec2 skullUV = kd / (max(ksz, 0.0001) * 2.2) + 0.5;
+              float skSample = (skullUV.x > 0.0 && skullUV.x < 1.0 && skullUV.y > 0.0 && skullUV.y < 1.0)
+                ? texture2D(skullIcon, skullUV).r : 0.0;
+              float kalpha = step(0.5, skSample); // binary — no bleed-through
+              float kcaustic = 0.5 + 0.5 * sin(time * 5.0 + hash(cellId) * 6.28);
+              vec3 kCol = mix(vec3(0.0, 0.95, 0.85), vec3(0.4, 1.0, 1.0), kcaustic); // cyan→bright cyan
+              extraCol  = mix(extraCol, kCol, kalpha);
+              extraMask = max(extraMask, kalpha);
+            }
+          }
+        }
 
       } else if(s < 5.5){
         // Regen: floating plus signs only — no status outline so nothing bleeds under shapes
@@ -1282,6 +1370,7 @@ loader.setDRACOLoader(dracoLoader);
 
 // ── State ────────────────────────────────────────────────────────────────────
 let currentModel    = null;
+let currentFilepath = null;
 let mixer           = null;
 const clock         = new THREE.Clock();
 let currentColorKey  = 'green';
@@ -1430,6 +1519,7 @@ function applyTint(colorKey) {
 function loadCharacter(filepath, autoRotate = false, modelScale = 2.0) {
   loadingEl.textContent = 'LOADING…';
   loadingEl.style.display = 'flex';
+  currentFilepath = filepath;
 
   if (currentModel) { scene.remove(currentModel); currentModel = null; }
   if (mixer)        { mixer.stopAllAction(); mixer = null; }
@@ -1652,6 +1742,50 @@ document.getElementById('zoomOut').addEventListener('click', () => {
   const dir = camera.position.clone().sub(controls.target).multiplyScalar(1 + ZOOM_STEP);
   camera.position.copy(controls.target).add(dir);
   controls.update();
+});
+
+// ── Download rigged GLB ───────────────────────────────────────────────────────
+document.getElementById('downloadBtn').addEventListener('click', async () => {
+  if (!currentFilepath) return;
+  const url = currentFilepath.split('/').map(encodeURIComponent).join('/');
+  const filename = currentFilepath.split('/').pop();
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objUrl);
+  } catch (err) {
+    console.error('Download failed:', err);
+  }
+});
+
+// ── Arrow-key navigation of the character list ────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  const panel = listEl.querySelector('.tab-panel.active');
+  if (!panel) return;
+  // Only navigate items in expanded (non-collapsed) sections of the active tab
+  const items = [...panel.querySelectorAll('.section-content:not(.collapsed) .char-item')];
+  if (!items.length) return;
+  e.preventDefault();
+  const curIdx = items.findIndex(i => i.classList.contains('active'));
+  let next;
+  if (curIdx === -1) {
+    next = items[0];
+  } else {
+    const dir = e.key === 'ArrowDown' ? 1 : -1;
+    next = items[(curIdx + dir + items.length) % items.length];
+  }
+  next.click();
+  next.scrollIntoView({ block: 'nearest' });
 });
 
 // Init swatch + PS1 default state
