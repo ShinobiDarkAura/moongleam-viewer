@@ -708,7 +708,7 @@ const PixelShader = {
   uniforms: {
     tDiffuse:  { value: null },
     resolution: { value: new THREE.Vector2(800, 600) },
-    pixelSize:  { value: 2.5 },
+    pixelSize:  { value: 4.5 },   // larger = chunkier PS1 pixels
   },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: `
@@ -831,22 +831,39 @@ const HoloShader = {
       float wipeBar  = smoothstep(0.08, 0.0, barDist);         // soft band
       wipeBar       += smoothstep(0.02, 0.0, barDist) * 0.7;   // hot core
 
-      // ── Instability: rolling wave + flicker bursts ──
+      // ── Instability: rolling wave + per-row flicker bursts ──
       float roll       = 0.9 + 0.1 * sin(vUv.y * 4.0 - time * 2.2);
       float flicker    = 0.9 + 0.1 * hash(floor(time * 18.0));
       float bigFlicker = step(0.96, hash(floor(time * 6.0))) * 0.35;
       float instab     = roll * flicker * (1.0 - bigFlicker);
 
+      // ── Global flicker: the whole projection pulses / stutters as one unit ──
+      float gFlick = 0.78 + 0.22 * hash(floor(time * 22.0));
+      gFlick *= 1.0 - step(0.92, hash(floor(time * 10.0) + 7.0)) * 0.5; // brief dropouts
+      gFlick  = mix(1.0, gFlick, 0.9);             // lively, but never strobes fully black
+
       // ── Edge / Fresnel rim glow on the silhouette ──
       float edgeGlow = (1.0 - smoothstep(0.45, 0.85, mask)) * mask * 1.6;
 
-      // ── Opacity: translucent ghost with gentle scanline see-through ──
-      // Lower base fill brings the translucency back; the wide soft mask keeps
-      // transparent areas faded rather than harsh. The wipe bar solidifies the
-      // figure as it passes.
-      float alpha = mask * (0.62 + 0.38 * scan);
+      // ── Outer glow: soft holographic halo around the whole model ──
+      float halo = 0.0;
+      for(int i = 0; i < 8; i++){
+        float a = float(i) * 0.7853982;            // 45° steps around the pixel
+        vec2 dir = vec2(cos(a), sin(a));
+        vec2 r1 = dir * vec2( 8.0 / resolution.x,  8.0 / resolution.y);
+        vec2 r2 = dir * vec2(18.0 / resolution.x, 18.0 / resolution.y);
+        halo = max(halo, smoothstep(0.012, 0.11, diffAt(vUv + r1, bgCol)));
+        halo = max(halo, smoothstep(0.012, 0.11, diffAt(vUv + r2, bgCol)) * 0.55);
+      }
+      float outerGlow = clamp(halo - mask, 0.0, 1.0); // ring just outside the figure
+
+      // ── Opacity: body translucent, head & hands (bright skin) stay opaque ──
+      // Skin reads as high luminance (detail≈1); dark clothing reads low → faint.
+      float solidity  = smoothstep(0.34, 0.72, detail);  // 0 = cloth, 1 = skin
+      float bodyAlpha = mix(0.28, 0.96, solidity);
+      float alpha = mask * bodyAlpha * (0.72 + 0.28 * scan);
       alpha += mask * wipeBar * 0.5;               // sweep solidifies as it passes
-      alpha *= instab;
+      alpha *= instab * gFlick;                    // whole figure flickers
       alpha = clamp(alpha + edgeGlow, 0.0, 1.0);
 
       // ── Holographic emission colour (single hue + chromatic fringe) ──
@@ -859,8 +876,9 @@ const HoloShader = {
       holo = max(holo, 0.0);
 
       // ── Composite: fade between background and the ghost ──
-      // Where alpha→0 (the bar) the pixel IS the background — genuine transparency.
       vec3 col = mix(bgCol, holo, alpha);
+      // Soft halo around the whole model, pulsing with the global flicker.
+      col += holoColor * outerGlow * 0.5 * gFlick;
 
       gl_FragColor = vec4(col, 1.0);
     }
@@ -1748,8 +1766,6 @@ document.getElementById('holoToggle').addEventListener('change', e => {
   document.getElementById('holoWrap').classList.toggle('active', e.target.checked);
   // Hide the ground shadow while the hologram is active — projections don't cast shadows.
   ground.visible = !e.target.checked;
-  // Refresh the background tint (holo cyan when on, palette colour when off).
-  applyTint(currentColorKey);
 });
 
 document.getElementById('statusPicker').addEventListener('change', e => {
