@@ -319,10 +319,144 @@
       pointer-events: none;
     }
 
-    #downloadBtn {
+    #animPicker {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      background: #1a1a1a;
+      color: #888;
+      border: 1px solid #333;
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      outline: none;
+    }
+    #animPicker:hover { color: #44ddff; border-color: #44ddff; }
+    #animPicker:focus { border-color: #555; }
+
+    /* Battle mode */
+    #battlePanel { display: none; padding: 14px; flex-direction: column; gap: 18px; }
+    #battlePanel.active { display: flex; }
+    #battleSeqBtn {
+      background: #1a1a1a; color: #888; border: 1px solid #333; padding: 9px;
+      font-family: inherit; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      cursor: pointer; transition: color 0.12s, border-color 0.12s;
+    }
+    #battleSeqBtn:hover { color: #44ff88; border-color: #44ff88; }
+    #battleSeqBtn.active { color: #ff5555; border-color: #ff5555; }
+    .battle-slot { display: flex; flex-direction: column; gap: 6px; }
+    .battle-slot-label {
+      font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #44ff88;
+    }
+    .battle-slot select {
+      background: #1a1a1a; color: #ccc; border: 1px solid #333;
+      padding: 6px 8px; font-family: inherit; font-size: 11px; outline: none; cursor: pointer;
+    }
+    .battle-slot select:focus { border-color: #555; }
+    #battleControls {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: none; gap: 6px;
+    }
+    #battleControls.active { display: flex; }
+    /* Battle portrait frames (game-UI VS cards) */
+    #battleStage {
+      position: absolute; inset: 0; display: none;
+      align-items: center; justify-content: center; gap: 48px;
+      pointer-events: none;
+    }
+    #battleStage.active { display: flex; }
+    .fighter-frame {
+      /* size set in JS (layoutFrames): 3:4 portrait, scaled to fit.
+         Background = themed colour; the canvas is inset 2px so this shows as a
+         border that FOLLOWS the chamfered corners (a real CSS border would be
+         clipped away on the diagonals). */
+      position: relative;
+      background: var(--active-color, #44ff88);
+      box-shadow: 0 0 18px -6px var(--active-color, #44ff88);
+      flex: 0 0 auto;
+    }
+    .fighter-frame canvas {
+      display: block; position: absolute; top: 2px; left: 2px;
+      width: calc(100% - 4px); height: calc(100% - 4px);  /* fill, inset 2px on ALL sides → full border */
+    }
+    /* Chamfered cutout corners — left frame: top-left + bottom-right; right: top-right + bottom-left.
+       Outer (frame) chamfer 18px; inner (canvas) chamfer 16px → 2px themed diagonal border. */
+    /* Each frame + its below-frame refresh button stack in a column;
+       the column aligns the button to the frame's outer-bottom corner. */
+    .fighter-col { display: flex; flex-direction: column; }
+    #battleStage .fighter-col:first-child { align-items: flex-start; }   /* button under bottom-LEFT */
+    #battleStage .fighter-col:last-child  { align-items: flex-end; }     /* button under bottom-RIGHT */
+    #battleStage .fighter-col:first-child .fighter-frame {
+      clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
+    }
+    #battleStage .fighter-col:last-child .fighter-frame {
+      clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+    }
+    #battleStage .fighter-col:first-child .fighter-frame canvas {
+      clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+    }
+    #battleStage .fighter-col:last-child .fighter-frame canvas {
+      clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+    }
+    /* Fixed re-roll button below each frame — position never shifts with chip count */
+    .frame-refresh {
+      margin-top: 8px; padding: 4px; color: #ccc; cursor: pointer;
+      background: rgba(0,0,0,0.45); border: 1px solid currentColor; border-radius: 2px;
+      pointer-events: auto; opacity: 0.5; transition: opacity 0.12s; display: none;
+    }
+    .frame-refresh:hover { opacity: 1; }
+    .frame-refresh svg { display: block; }
+    /* ── Multi-status badges + roll button ── */
+    .status-chip {
+      display: inline-block; padding: 2px 6px; margin: 2px;
+      font-family: inherit; font-size: 9px; letter-spacing: 0.1em; font-weight: bold;
+      border: 1px solid currentColor; border-radius: 2px; background: rgba(0,0,0,0.45);
+      text-transform: uppercase; line-height: 1.2;
+    }
+    .status-chip.glyph { padding: 3px; vertical-align: middle; }
+    .status-chip.glyph svg { display: block; }
+    /* Inline re-roll button — chip-styled, half opacity, full on hover */
+    .status-refresh {
+      vertical-align: middle; padding: 3px; color: #ccc; cursor: pointer;
+      pointer-events: auto; opacity: 0.5; transition: opacity 0.12s;
+    }
+    .status-refresh:hover { opacity: 1; }
+    .status-refresh svg { display: block; }
+    #statusBadges {
+      position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+      display: none; text-align: center; pointer-events: none; z-index: 5; max-width: 80%;
+    }
+    .frame-badges {
+      position: absolute; bottom: 10px; left: 0; right: 0; text-align: center;
+      pointer-events: none; z-index: 5; display: none;
+    }
+    /* Retro-TV horizontal scanlines over each frame (inset to keep the border clean) */
+    .fighter-frame::after {
+      content: ''; position: absolute; inset: 2px; pointer-events: none;
+      background: repeating-linear-gradient(0deg,
+        rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 1px, transparent 1px, transparent 3px);
+    }
+    #battleControls button {
+      background: #1a1a1a; color: #888; border: 1px solid #333;
+      padding: 7px 11px; font-family: inherit; font-size: 9px; letter-spacing: 0.12em;
+      text-transform: uppercase; cursor: pointer; transition: color 0.12s, border-color 0.12s;
+    }
+    #battleControls button:hover { color: #44ddff; border-color: #44ddff; }
+    #battleControls button.active { color: #44ff88; border-color: #44ff88; }
+
+    #viewerControls {
       position: absolute;
       top: 16px;
       right: 16px;
+      display: flex;
+      gap: 8px;
+    }
+    #downloadBtn, #poseBtn {
       display: flex;
       align-items: center;
       gap: 7px;
@@ -337,11 +471,13 @@
       cursor: pointer;
       transition: color 0.12s, border-color 0.12s, background 0.12s;
     }
-    #downloadBtn:hover { color: #44ff88; border-color: #44ff88; background: #141414; }
-    #downloadBtn:active { background: #222; }
-    #downloadBtn:disabled { opacity: 0.4; cursor: default; color: #555; border-color: #2a2a2a; }
-    #downloadBtn:disabled:hover { color: #555; border-color: #2a2a2a; background: #1a1a1a; }
-    #downloadBtn .dl-arrow { font-size: 13px; line-height: 1; }
+    #downloadBtn:hover, #poseBtn:hover { color: #44ff88; border-color: #44ff88; background: #141414; }
+    #downloadBtn:active, #poseBtn:active { background: #222; }
+    #downloadBtn:disabled, #poseBtn:disabled { opacity: 0.4; cursor: default; color: #555; border-color: #2a2a2a; }
+    #downloadBtn:disabled:hover, #poseBtn:disabled:hover { color: #555; border-color: #2a2a2a; background: #1a1a1a; }
+    #downloadBtn .dl-arrow, #poseBtn .dl-arrow { font-size: 13px; line-height: 1; }
+    /* Active (animation stopped) state */
+    #poseBtn.active { color: #44ff88; border-color: #44ff88; }
   </style>
 </head>
 <body>
@@ -360,10 +496,6 @@
       <option value="purple">Purple</option>
       <option value="red">Red</option>
     </select>
-    <div class="intensity-wrap">
-      <label>Intensity</label>
-      <input type="range" id="intensity" min="0" max="100" value="100" />
-    </div>
     <div class="intensity-wrap">
       <label>Brightness</label>
       <input type="range" id="brightness" min="20" max="390" value="253" />
@@ -398,6 +530,10 @@
         <option value="12">Purge</option>
       </select>
     </div>
+    <label class="holo-wrap" id="multiWrap">
+      <input type="checkbox" id="multiToggle" />
+      Multi-Status
+    </label>
     <div class="zoom-wrap">
       <button id="zoomOut">−</button>
       <button id="zoomIn">+</button>
@@ -409,14 +545,52 @@
   <aside>
     <div class="tab-bar" id="tabBar"></div>
     <div id="charList"></div>
+    <div id="battlePanel">
+      <button id="battleSeqBtn">BATTLE: OFF</button>
+      <div class="battle-slot">
+        <div class="battle-slot-label">Fighter A</div>
+        <select id="slotAChar"></select>
+        <select id="slotAAnim"></select>
+        <select id="slotAStatus"></select>
+      </div>
+      <div class="battle-slot">
+        <div class="battle-slot-label">Fighter B</div>
+        <select id="slotBChar"></select>
+        <select id="slotBAnim"></select>
+        <select id="slotBStatus"></select>
+      </div>
+    </div>
   </aside>
   <div id="viewport">
     <canvas id="canvas"></canvas>
+    <div id="battleStage">
+      <div class="fighter-col">
+        <div class="fighter-frame"><canvas id="frameCanvasA"></canvas><div class="frame-badges" id="badgesA"></div></div>
+        <button class="frame-refresh" data-scope="A" title="Re-roll statuses"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg></button>
+      </div>
+      <div class="fighter-col">
+        <div class="fighter-frame"><canvas id="frameCanvasB"></canvas><div class="frame-badges" id="badgesB"></div></div>
+        <button class="frame-refresh" data-scope="B" title="Re-roll statuses"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg></button>
+      </div>
+    </div>
+    <div id="statusBadges"></div>
     <div id="loading">SELECT A CHARACTER</div>
+    <select id="animPicker" title="Animation"></select>
+    <div id="battleControls">
+      <button data-preset="front">Front</button>
+      <button data-preset="profile">Profile</button>
+      <button data-preset="angled">Zoomed</button>
+      <button data-preset="pokemon">Pokemon</button>
+    </div>
     <div id="model-name"></div>
-    <button id="downloadBtn" title="Download rigged GLB">
-      <span class="dl-arrow">↓</span> DOWNLOAD GLB
-    </button>
+    <div id="viewerControls">
+      <button id="poseBtn" title="Stop the walking animation">
+        <span class="dl-arrow">⏸</span> STAND STILL
+      </button>
+      <button id="downloadBtn" title="Download rigged GLB">
+        <span class="dl-arrow">↓</span> DOWNLOAD GLB
+      </button>
+    </div>
   </div>
 </main>
 
@@ -779,8 +953,10 @@ const HoloShader = {
 
     void main(){
       const vec3 LW = vec3(0.299, 0.587, 0.114);
-      // Sample a corner pixel as the true background reference
-      vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
+      // Background reference: average the TOP corners (stay background even when
+      // the figure is zoomed in / fills the lower frame — bottom corners can land
+      // on a limb, which would invert the mask and cause intense flashing).
+      vec3 bgCol = (texture2D(tDiffuse, vec2(0.03, 0.97)).rgb + texture2D(tDiffuse, vec2(0.97, 0.97)).rgb) * 0.5;
       float bgLum = dot(bgCol, LW);
       vec4 baseRaw = texture2D(tDiffuse, vUv);
 
@@ -1057,7 +1233,7 @@ const StatusShader = {
       vec4 base = texture2D(tDiffuse, vUv);
       if(status < 0.5){ gl_FragColor = base; return; }
 
-      vec3 bgCol = texture2D(tDiffuse, vec2(0.01, 0.01)).rgb;
+      vec3 bgCol = (texture2D(tDiffuse, vec2(0.03, 0.97)).rgb + texture2D(tDiffuse, vec2(0.97, 0.97)).rgb) * 0.5;
       float s = status;
       float px = 1.0 / resolution.x;
       float py = 1.0 / resolution.y;
@@ -1403,18 +1579,18 @@ composer.passes.splice(6, 0, statusPass);     // status on top of holo, before p
 // Status metadata: label, outline colour, base tint for color filter
 const STATUS_META = [
   null,
-  { label: 'Vigor',     color: 'red' },
-  { label: 'Strike',    color: 'red' },
-  { label: 'Burn',      color: 'orange' },
-  { label: 'Corrosion', color: 'cyan' },
-  { label: 'Regen',     color: 'green' },
-  { label: 'Block',     color: 'cyan' },
-  { label: 'Reflect',   color: 'cyan' },
-  { label: 'Weak',      color: 'purple' },
-  { label: 'Frail',     color: 'purple' },
-  { label: 'Leech',     color: 'pink' },
-  { label: 'Clear',     color: 'green' },
-  { label: 'Purge',     color: 'pink' },
+  { label: 'Vigor',     color: 'red',    abbr: 'VIG' },
+  { label: 'Strike',    color: 'red',    abbr: 'STR' },
+  { label: 'Burn',      color: 'orange', abbr: 'BRN' },
+  { label: 'Corrosion', color: 'cyan',   abbr: 'COR' },
+  { label: 'Regen',     color: 'green',  abbr: 'REG' },
+  { label: 'Block',     color: 'cyan',   abbr: 'BLK' },
+  { label: 'Reflect',   color: 'cyan',   abbr: 'REF' },
+  { label: 'Weak',      color: 'purple', abbr: 'WK' },
+  { label: 'Frail',     color: 'purple', abbr: 'FRL' },
+  { label: 'Leech',     color: 'pink',   abbr: 'LCH' },
+  { label: 'Clear',     color: 'green',  abbr: 'CLR' },
+  { label: 'Purge',     color: 'pink',   abbr: 'PRG' },
 ];
 
 // ── Loaders ──────────────────────────────────────────────────────────────────
@@ -1435,6 +1611,12 @@ let currentDesaturate = true;
 let ps1Mode          = true;
 let currentStatus    = 0;
 let meshList         = [];
+let animFrozen       = false;   // true → walking animation stopped, character stands still
+let currentClips     = [];      // AnimationClips on the loaded model
+let currentAction    = null;    // currently-playing AnimationAction
+let viewMode         = 'single';// 'single' | 'battle'
+let lastSingleFilepath = null;  // restored when leaving battle
+let frameA = null, frameB = null; // battle portrait viewers (created on first entry)
 
 // ── Tint helpers ─────────────────────────────────────────────────────────────
 // Toon gradient map: 3 bands
@@ -1451,20 +1633,12 @@ function tintedColor(colorKey) {
   return new THREE.Color().lerpColors(grey, full, currentIntensity);
 }
 
-function applyTint(colorKey) {
+// Build the look-appropriate material for one mesh from its original material,
+// honouring the current filter colour, PS1/toon mode and desaturate setting.
+// Shared by the single view (applyTint) and the battle portrait viewers.
+function makeCharacterMaterial(orig, colorKey = currentColorKey) {
   const p = PALETTE[colorKey];
   const noFilter = colorKey === 'none';
-
-  // Outline whenever a color filter is active (toon or PS1)
-  outlinePass.enabled = !noFilter;
-  if (!noFilter) {
-    outlinePass.visibleEdgeColor.set(p.hex);
-    outlinePass.hiddenEdgeColor.set(p.hex);
-  }
-
-  meshList.forEach(mesh => {
-    const orig = mesh.userData.origMat;
-    if (!orig) return;
 
     if (ps1Mode) {
       // ── PS1 mode: flat-shaded Lambert + nearest-filter textures + vertex snap ──
@@ -1509,7 +1683,7 @@ function applyTint(colorKey) {
       };
       lambert.customProgramCacheKey = () => `ps1-${noFilter ? 'nocolor' : 'color'}-${ps1Desat ? 'desat' : 'color'}`;
 
-      mesh.material = lambert;
+      return lambert;
 
     } else if (noFilter) {
       // ── No filter, no PS1: restore original material + texture filters ──
@@ -1519,7 +1693,7 @@ function applyTint(colorKey) {
         orig.map.generateMipmaps = orig.map.userData.origMipmaps;
         orig.map.needsUpdate     = true;
       }
-      mesh.material = orig;
+      return orig;
 
     } else {
       // ── Toon mode ──
@@ -1549,10 +1723,29 @@ function applyTint(colorKey) {
       } else {
         toon.customProgramCacheKey = () => 'normal';
       }
-      mesh.material = toon;
       toon.needsUpdate = true;
+      return toon;
     }
+}
+
+// Apply the current look to all meshes in the single-view scene + update chrome.
+function applyTint(colorKey) {
+  const p = PALETTE[colorKey];
+  const noFilter = colorKey === 'none';
+
+  // Outline whenever a color filter is active (toon or PS1)
+  outlinePass.enabled = !noFilter;
+  if (!noFilter) {
+    outlinePass.visibleEdgeColor.set(p.hex);
+    outlinePass.hiddenEdgeColor.set(p.hex);
+  }
+
+  meshList.forEach(mesh => {
+    if (mesh.userData.origMat) mesh.material = makeCharacterMaterial(mesh.userData.origMat);
   });
+
+  // Battle portrait viewers (if active) follow the same filter for outline + bg.
+  if (viewMode === 'battle' && typeof refreshBattleTheme === 'function') refreshBattleTheme();
 
   const sidebarColor = noFilter ? '#555' : p.hex;
   document.documentElement.style.setProperty('--active-color', sidebarColor);
@@ -1569,6 +1762,9 @@ function applyTint(colorKey) {
     scene.background = tinted;
     renderer.setClearColor(tinted, 1);
   }
+
+  // Tint the hologram to match the active filter colour (preview).
+  if (!noFilter && p.color) holoPass.uniforms.holoColor.value.copy(p.color);
 }
 
 // ── Load character ────────────────────────────────────────────────────────────
@@ -1623,11 +1819,22 @@ function loadCharacter(filepath, autoRotate = false, modelScale = 2.0) {
 
     outlinePass.selectedObjects = meshList;
 
-    // Animations
-    if (gltf.animations.length) {
+    // Animations — build clip list, populate the picker, play the default clip.
+    currentClips  = gltf.animations || [];
+    currentAction = null;
+    if (currentClips.length) {
       mixer = new THREE.AnimationMixer(model);
-      mixer.clipAction(gltf.animations[0]).play();
+      mixer.addEventListener('finished', onAnimFinished);
+      populateAnimPicker();
+      const def = defaultClipName(currentClips);
+      if (animPicker) animPicker.value = def;
+      playAnimation(def, 0);          // instant (no crossfade) on load
+    } else {
+      mixer = null;
+      if (animPicker) animPicker.style.display = 'none';
     }
+    // Carry the stop/stand-still preference onto the newly loaded model.
+    applyFrozenState();
 
         // Re-center camera target on the model
     const modelCenter = new THREE.Vector3();
@@ -1643,6 +1850,7 @@ function loadCharacter(filepath, autoRotate = false, modelScale = 2.0) {
 
     loadingEl.style.display = 'none';
     nameTag.textContent = filepath.split('/').pop().replace('.glb', '');
+    if (multiOn && viewMode === 'single') applySingleMulti();
 
   }, undefined, (err) => {
     console.error('Load error:', err);
@@ -1655,6 +1863,7 @@ const tabBar = document.getElementById('tabBar');
 const listEl = document.getElementById('charList');
 
 function activateTab(idx) {
+  exitBattleMode();   // leaving any battle view when a character tab is chosen
   tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
   listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === idx));
   const firstItem = listEl.querySelectorAll('.tab-panel')[idx].querySelector('.char-item');
@@ -1732,11 +1941,28 @@ GROUPS.forEach((group, idx) => {
   listEl.appendChild(panel);
 });
 
+// ── Battle tab ────────────────────────────────────────────────────────────────
+const battleBtn = document.createElement('button');
+battleBtn.className = 'tab-btn';
+battleBtn.textContent = 'Battle';
+battleBtn.addEventListener('click', () => {
+  tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  battleBtn.classList.add('active');
+  enterBattleMode();
+});
+tabBar.appendChild(battleBtn);
+
 // ── Default selection: Round 2 tab, first item ────────────────────────────────
 tabBar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 1));
 listEl.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 1));
 const defaultItem = listEl.querySelectorAll('.tab-panel')[1].querySelector('.char-item');
 if (defaultItem) defaultItem.click();
+
+// On load a <select> can hold keyboard focus, which swallows the arrow keys
+// before the list-nav handler sees them. Blur it so arrows work immediately.
+if (document.activeElement && document.activeElement !== document.body) {
+  document.activeElement.blur();
+}
 
 // ── Color picker ─────────────────────────────────────────────────────────────
 document.getElementById('colorPicker').addEventListener('change', e => {
@@ -1744,12 +1970,9 @@ document.getElementById('colorPicker').addEventListener('change', e => {
   applyTint(currentColorKey);
   // Holo keeps its own signature cyan — independent of the model tint, so the
   // hologram reads as a hologram regardless of which palette colour is active.
+  e.target.blur();   // return focus to body so list arrow-keys keep working
 });
 
-document.getElementById('intensity').addEventListener('input', e => {
-  currentIntensity = parseFloat(e.target.value) / 100;
-  applyTint(currentColorKey);
-});
 
 document.getElementById('desaturate').addEventListener('change', e => {
   currentDesaturate = e.target.checked;
@@ -1770,6 +1993,9 @@ document.getElementById('holoToggle').addEventListener('change', e => {
   document.getElementById('holoWrap').classList.toggle('active', e.target.checked);
   // Hide the ground shadow while the hologram is active — projections don't cast shadows.
   ground.visible = !e.target.checked;
+  // In battle mode, drive both portrait frames' holo too.
+  if (frameA) frameA.setHolo(e.target.checked);
+  if (frameB) frameB.setHolo(e.target.checked);
 });
 
 document.getElementById('statusPicker').addEventListener('change', e => {
@@ -1783,6 +2009,7 @@ document.getElementById('statusPicker').addEventListener('change', e => {
     document.getElementById('colorPicker').value = meta.color;
     applyTint(meta.color);
   }
+  e.target.blur();   // return focus to body so list arrow-keys keep working
 });
 
 document.getElementById('brightness').addEventListener('input', e => {
@@ -1799,6 +2026,95 @@ document.getElementById('zoomOut').addEventListener('click', () => {
   camera.position.copy(controls.target).add(dir);
   controls.update();
 });
+
+// ── Stop / resume the walking animation ──────────────────────────────────────
+const poseBtn = document.getElementById('poseBtn');
+function applyFrozenState() {
+  poseBtn.classList.toggle('active', animFrozen);
+  poseBtn.innerHTML = animFrozen
+    ? '<span class="dl-arrow">▶</span> RESUME'
+    : '<span class="dl-arrow">⏸</span> STAND STILL';
+  // Freeze the animation in place — the render loop stops updating the mixer so
+  // the character holds its current pose. (We avoid skeleton.pose(): these
+  // walk-cycle GLBs have a degenerate bind pose that collapses the mesh.)
+  // Apply one zero-delta update so a freshly-loaded-while-frozen model shows a
+  // posed frame instead of the collapsed bind pose.
+  if (animFrozen && mixer) mixer.update(0);
+}
+poseBtn.addEventListener('click', () => {
+  animFrozen = !animFrozen;
+  applyFrozenState();
+  poseBtn.blur();   // keep list arrow-keys working
+});
+
+// ── Animation selection (crossfade between a model's clips) ──────────────────
+const animPicker = document.getElementById('animPicker');
+const CLIP_LABELS = { idle:'Idle', walk:'Walk', run:'Run', attack:'Attack', hit:'Hit', death:'Death', collect:'Collect' };
+const ONE_SHOT    = new Set(['attack', 'hit', 'death', 'collect']);   // play once, don't loop
+const CLIP_ORDER  = ['walk', 'run', 'attack', 'hit', 'death', 'collect'];
+const HIDDEN_CLIPS = new Set(['idle', 'run']);   // excluded from pickers + never used as default/rest
+const RESTING = 'walk';                   // default + post-one-shot pose (idle removed)
+
+function clipLabel(name) { return CLIP_LABELS[name] || name.replace(/[_|]+/g, ' ').trim(); }
+// First available resting clip (walk → run → first non-hidden) for a clip list.
+function defaultClipName(clips) {
+  const usable = clips.filter(c => !HIDDEN_CLIPS.has(c.name));
+  return (['walk', 'run'].find(n => usable.some(c => c.name === n)) || (usable[0] && usable[0].name) || (clips[0] && clips[0].name));
+}
+
+function populateAnimPicker() {
+  if (!animPicker) return;
+  const usable = currentClips.filter(c => !HIDDEN_CLIPS.has(c.name));
+  if (usable.length <= 1) { animPicker.style.display = 'none'; return; }
+  const sorted = usable.sort((a, b) => {
+    const ia = CLIP_ORDER.indexOf(a.name), ib = CLIP_ORDER.indexOf(b.name);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  animPicker.innerHTML = sorted
+    .map(c => `<option value="${c.name}">${clipLabel(c.name)}</option>`).join('');
+  animPicker.style.display = 'block';
+}
+
+function setupClipAction(clip) {
+  const action = mixer.clipAction(clip);
+  const oneShot = ONE_SHOT.has(clip.name);
+  action.setLoop(oneShot ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+  action.clampWhenFinished = oneShot;   // one-shots hold their last frame until we switch
+  return action;
+}
+
+// Fade to a clip by name. fade=0 → instant (used on load).
+function playAnimation(name, fade = 0.3) {
+  if (!mixer) return;
+  const clip = currentClips.find(c => c.name === name);
+  if (!clip) return;
+  const next = setupClipAction(clip);
+  if (currentAction === next) { next.reset().play(); return; }
+  next.reset();
+  next.setEffectiveWeight(1);
+  next.fadeIn(fade);
+  next.play();
+  if (currentAction) currentAction.fadeOut(fade);
+  currentAction = next;
+}
+
+// One-shot clips return to idle when finished (death holds its final pose).
+function onAnimFinished(e) {
+  const name = e.action.getClip().name;
+  if (name === 'death') return;
+  const rest = defaultClipName(currentClips);
+  if (rest) {
+    playAnimation(rest, 0.3);
+    if (animPicker) animPicker.value = rest;
+  }
+}
+
+if (animPicker) {
+  animPicker.addEventListener('change', e => {
+    playAnimation(e.target.value, 0.3);
+    e.target.blur();   // return focus to body so list arrow-keys keep working
+  });
+}
 
 // ── Download rigged GLB ───────────────────────────────────────────────────────
 document.getElementById('downloadBtn').addEventListener('click', async () => {
@@ -1862,15 +2178,518 @@ function resize() {
   pixelPass.uniforms.resolution.value.set(w * pr, h * pr);
   statusPass.uniforms.resolution.value.set(w * pr, h * pr);
   holoPass.uniforms.resolution.value.set(w * pr, h * pr);
+  if (viewMode === 'battle') layoutFrames();
 }
 new ResizeObserver(resize).observe(document.getElementById('viewport'));
 resize();
+
+// ── Battle Frame mode ─────────────────────────────────────────────────────────
+const slotAChar = document.getElementById('slotAChar');
+const slotBChar = document.getElementById('slotBChar');
+const battleAnimPickers = {
+  A: document.getElementById('slotAAnim'),
+  B: document.getElementById('slotBAnim'),
+};
+const battleStatusPickers = {
+  A: document.getElementById('slotAStatus'),
+  B: document.getElementById('slotBStatus'),
+};
+
+// Flatten the Round 2 group into {label, filepath, scale} for the fighter selects.
+function allCharacterOptions() {
+  const out = [];
+  const round2 = GROUPS.filter(g => g.label === 'Round 2');
+  for (const g of round2) for (const s of g.sections) s.files.forEach((f, i) => {
+    const filepath = `${s.dir}/${f}`;
+    const label = (s.labels && s.labels[i]) || f.replace(/^.*\//, '').replace('.glb', '')
+      .replace(/[-_]/g, ' ').replace(/\bmaimed\b/gi, '').replace(/\bwalking\b/gi, '')
+      .replace(/\s+/g, ' ').trim();
+    out.push({ label, filepath, scale: s.scale ?? 2.0 });
+  });
+  return out;
+}
+
+// A self-contained mini character viewer for one battle portrait frame: its own
+// scene, camera, renderer + PS1/outline pass chain, so each frame can have its
+// own background and themed outline (game-UI VS card look).
+function createPortraitViewer(canvas) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const fscene = new THREE.Scene();
+  const fcam = new THREE.PerspectiveCamera(42, 0.75, 0.01, 100);
+  fcam.position.set(0, 0.95, 3.3); fcam.lookAt(0, 0.8, 0);
+  fscene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const klight = new THREE.DirectionalLight(0xffffff, 1.2);
+  klight.position.set(2, 4, 3); klight.castShadow = true;
+  klight.shadow.mapSize.set(1024, 1024); klight.shadow.camera.near = 0.5; klight.shadow.camera.far = 20;
+  klight.shadow.camera.left = -3; klight.shadow.camera.right = 3; klight.shadow.camera.top = 3; klight.shadow.camera.bottom = -3;
+  klight.shadow.bias = -0.001; klight.shadow.radius = 4; fscene.add(klight);
+  const flight = new THREE.DirectionalLight(0xaabbff, 0.4); flight.position.set(-2, 1, -1); fscene.add(flight);
+  const fground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.45 }));
+  fground.rotation.x = -Math.PI / 2; fground.receiveShadow = true; fscene.add(fground);
+
+  const fcomposer = new EffectComposer(renderer);
+  fcomposer.addPass(new RenderPass(fscene, fcam));
+  const foutline = new OutlinePass(new THREE.Vector2(487, 650), fscene, fcam);
+  foutline.edgeStrength = 4; foutline.edgeGlow = 0; foutline.edgeThickness = 2; foutline.pulsePeriod = 0;
+  fcomposer.addPass(foutline);
+  fcomposer.addPass(new ShaderPass(GammaCorrectionShader));
+  const fbright = new ShaderPass(BrightnessShader); fbright.uniforms.brightness.value = 2.53; fcomposer.addPass(fbright);
+  const fpix = new ShaderPass(PixelShader); fcomposer.addPass(fpix);
+  // Holo + status, per frame (same order as the single-view chain)
+  const fholo = new ShaderPass(HoloShader); fholo.enabled = false; fcomposer.addPass(fholo);
+  const fstatus = new ShaderPass(StatusShader); fstatus.enabled = false; fcomposer.addPass(fstatus);
+  fcomposer.addPass(new ShaderPass(PosterizeShader));
+
+  let model = null, mixer = null, clips = [], action = null, meshes = [], onIdle = null, elapsed = 0;
+
+  function setupAction(clip, forceLoop = false) {
+    const a = mixer.clipAction(clip);
+    const one = !forceLoop && ONE_SHOT.has(clip.name);   // forceLoop overrides one-shots (manual picker)
+    a.setLoop(one ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+    a.clampWhenFinished = one; return a;
+  }
+  function playClip(name, fade = 0.3, forceLoop = false) {
+    if (!mixer) return;
+    const clip = clips.find(c => c.name === name); if (!clip) return;
+    const next = setupAction(clip, forceLoop);
+    if (action === next) { next.reset().play(); return; }
+    next.reset(); next.setEffectiveWeight(1); next.fadeIn(fade); next.play();
+    if (action) action.fadeOut(fade); action = next;
+  }
+  function load(filepath, scale, onReady) {
+    if (model) { fscene.remove(model); model = null; }
+    if (mixer) { mixer.stopAllAction(); mixer = null; }
+    clips = []; action = null; meshes = [];
+    const url = filepath.split('/').map(encodeURIComponent).join('/');
+    loader.load(url, gltf => {
+      const m = gltf.scene;
+      const wrap = new THREE.Group(); wrap.add(m); fscene.add(wrap); wrap.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(wrap);
+      const size = new THREE.Vector3(); bb.getSize(size);
+      const center = new THREE.Vector3(); bb.getCenter(center);
+      const s = scale / Math.max(Math.max(size.x, size.y, size.z), 0.001);
+      wrap.scale.setScalar(s);
+      wrap.position.set(-center.x * s, -center.y * s + (size.y * s * 0.5), -center.z * s);
+      const pivot = new THREE.Group(); fscene.remove(wrap); pivot.add(wrap); fscene.add(pivot);
+      model = pivot;
+      m.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.userData.origMat = n.material; meshes.push(n); n.material = makeCharacterMaterial(n.material); } });
+      foutline.selectedObjects = meshes;
+      fground.position.y = new THREE.Box3().setFromObject(pivot).min.y;
+      clips = gltf.animations || [];
+      if (clips.length) {
+        mixer = new THREE.AnimationMixer(m);
+        mixer.addEventListener('finished', e => {
+          if (e.action.getClip().name !== 'death') { const r = defaultClipName(clips); if (r) { playClip(r, 0.3); onIdle && onIdle(); } }
+        });
+      }
+      renderer.compile(fscene, fcam);
+      onReady && onReady();
+    }, undefined, err => console.error('portrait load error', err));
+  }
+  function resize() {
+    const w = canvas.clientWidth || 487, h = canvas.clientHeight || 650;
+    const pr = Math.min(window.devicePixelRatio, 2);
+    renderer.setPixelRatio(pr); renderer.setSize(w, h, false); fcomposer.setSize(w, h);
+    fcam.aspect = w / h; fcam.updateProjectionMatrix();
+    foutline.resolution.set(w, h);
+    fpix.uniforms.resolution.value.set(w * pr, h * pr);
+    fstatus.uniforms.resolution.value.set(w * pr, h * pr);
+    fholo.uniforms.resolution.value.set(w * pr, h * pr);
+  }
+  return {
+    load, playClip, resize,
+    setTheme: (bg, edgeHex) => { fscene.background = bg; renderer.setClearColor(bg, 1); foutline.visibleEdgeColor.set(edgeHex); foutline.hiddenEdgeColor.set(edgeHex); },
+    setRotation: rad => { if (model) model.rotation.y = rad; },
+    setShift: x => { if (model) model.position.x = x; },
+    setCamera: (dist, ty) => { fcam.position.set(0, ty, dist); fcam.lookAt(0, ty * 0.82, 0); },
+    refreshMaterials: (ck) => meshes.forEach(n => { if (n.userData.origMat) n.material = makeCharacterMaterial(n.userData.origMat, ck); }),
+    update: dt => {
+      if (mixer && !animFrozen) mixer.update(dt);
+      elapsed += dt;
+      if (fholo.enabled)   fholo.uniforms.time.value   = elapsed;
+      if (fstatus.enabled) fstatus.uniforms.time.value = elapsed;
+      fcomposer.render();
+    },
+    getClips: () => clips,
+    setOnIdle: cb => { onIdle = cb; },
+    setStatus: n => { fstatus.uniforms.status.value = n; fstatus.enabled = n > 0; },
+    setHolo: on => { fholo.enabled = on; fground.visible = !on; },
+    setHoloColor: col => { fholo.uniforms.holoColor.value.copy(col); },
+    getCurrent: () => action ? { name: action.getClip().name, time: action.time, loop: !ONE_SHOT.has(action.getClip().name) } : null,
+    setActionTime: t => { if (action) action.time = t; },
+  };
+}
+
+// Camera presets are per-frame character rotations + camera distance.
+const D2R = Math.PI / 180;
+// `a`/`b` = per-fighter Y rotation (deg); A is the left frame, B the right.
+// A positive turns toward screen-right (inward), B negative toward screen-left → they
+// face EACH OTHER. dist/ty frame the shot; aDist/bDist/aTy/bTy override per-frame.
+const BATTLE_PRESETS = {
+  front:   { a: 0,   b: 0,   dist: 3.3,  ty: 0.95 },
+  profile: { a: 90,  b: -90, dist: 3.3,  ty: 0.95 },   // facing each other, front zoom
+  // Bust framing, both facing the camera head-on (no rotation).
+  angled:  { a: 0,   b: 0,   dist: 1.36, ty: 1.44, bShiftX: 0.04 },
+  pokemon: { a: 180, b: 0,   dist: 1.7,  ty: 1.15, bDist: 2.4, bTy: 1.0 }, // A back & near, B facing & smaller
+};
+let currentPreset = 'front';
+function applyPreset(name) {
+  const p = BATTLE_PRESETS[name]; if (!p) return;
+  currentPreset = name;
+  if (frameA) { frameA.setRotation(p.a * D2R); frameA.setCamera(p.aDist ?? p.dist, p.aTy ?? p.ty); frameA.setShift(p.aShiftX ?? 0); }
+  if (frameB) { frameB.setRotation(p.b * D2R); frameB.setCamera(p.bDist ?? p.dist, p.bTy ?? p.ty); frameB.setShift(p.bShiftX ?? 0); }
+  document.querySelectorAll('#battleControls button')
+    .forEach(b => b.classList.toggle('active', b.dataset.preset === name));
+}
+
+// Size the two portrait frames: 3:4, ≤650px tall, scaled down to fit the viewport.
+function layoutFrames() {
+  const vp = document.getElementById('viewport');
+  const availH = vp.clientHeight - 90;          // leave room for the preset bar
+  const availW = (vp.clientWidth - 64) / 2;     // two frames + gap
+  const h = Math.max(120, Math.min(325, availH, availW * 4 / 3));
+  const w = h * 3 / 4;
+  document.querySelectorAll('.fighter-frame').forEach(el => { el.style.height = h + 'px'; el.style.width = w + 'px'; });
+  if (frameA) frameA.resize();
+  if (frameB) frameB.resize();
+}
+
+function ensureFrames() {
+  if (frameA && frameB) return;
+  frameA = createPortraitViewer(document.getElementById('frameCanvasA'));
+  frameB = createPortraitViewer(document.getElementById('frameCanvasB'));
+  frameA.setOnIdle(() => { if (battleAnimPickers.A) battleAnimPickers.A.value = RESTING; });
+  frameB.setOnIdle(() => { if (battleAnimPickers.B) battleAnimPickers.B.value = RESTING; });
+}
+
+// Each fighter holds a LIST of statuses (1 from the dropdown, or 2–3 from the
+// multi-status tester). Channel split: dominant (list[0]) → colour/outline/bg;
+// second (list[1]) → particle symbols; the badge row shows them all.
+const battleStatusList = { A: [], B: [] };
+function frameDominant(key) { return battleStatusList[key][0] || 0; }
+function frameParticle(key) { const l = battleStatusList[key]; return (l.length >= 2 ? l[1] : l[0]) || 0; }
+function frameColorKey(key) {
+  const d = frameDominant(key);
+  return (d > 0 && STATUS_META[d]) ? STATUS_META[d].color : currentColorKey;
+}
+function themeFor(colorKey) {
+  const noFilter = colorKey === 'none';
+  const p = PALETTE[colorKey];
+  return {
+    edge: noFilter ? '#888888' : p.hex,
+    bg:   noFilter ? new THREE.Color(0x161616) : p.color.clone().multiplyScalar(0.022),
+  };
+}
+// Apply a fighter's colour to its frame: 3D bg, 3D outline, character tint, holo
+// hue, the CSS frame border, plus the particle status + badge row.
+function applyFrameColor(key) {
+  const frame = key === 'A' ? frameA : frameB;
+  if (!frame) return;
+  const ck = frameColorKey(key);
+  const t = themeFor(ck);
+  frame.setTheme(t.bg, t.edge);
+  frame.refreshMaterials(ck);
+  const pc = PALETTE[ck];
+  if (pc && pc.color) frame.setHoloColor(pc.color);
+  const el = document.getElementById(key === 'A' ? 'frameCanvasA' : 'frameCanvasB').parentElement;
+  if (el) el.style.setProperty('--active-color', t.edge);
+  frame.setStatus(frameParticle(key));
+  renderFrameBadges(key);
+}
+function refreshBattleTheme() { applyFrameColor('A'); applyFrameColor('B'); }
+
+// Play a clip on one fighter, phase-aligned to the partner if both loop the same
+// clip — so idle/walk stay in sync between the two frames.
+function playFrame(key, name, fade = 0.3, loop = false) {
+  const frame = key === 'A' ? frameA : frameB;
+  const partner = key === 'A' ? frameB : frameA;
+  if (!frame) return;
+  frame.playClip(name, fade, loop);
+  if (!ONE_SHOT.has(name) && partner) {
+    const pc = partner.getCurrent();
+    if (pc && pc.name === name && pc.loop) frame.setActionTime(pc.time);
+  }
+}
+
+function populateStatusPickers() {
+  if (battleStatusPickers.A.options.length) return;
+  let html = '<option value="0">— None —</option>';
+  for (let i = 1; i < STATUS_META.length; i++) html += `<option value="${i}">${STATUS_META[i].label}</option>`;
+  battleStatusPickers.A.innerHTML = html;
+  battleStatusPickers.B.innerHTML = html;
+}
+
+function populateFramePicker(key) {
+  const frame = key === 'A' ? frameA : frameB;
+  const sel = battleAnimPickers[key];
+  const fclips = frame.getClips().filter(c => !HIDDEN_CLIPS.has(c.name));
+  if (fclips.length <= 1) { sel.innerHTML = ''; sel.style.display = 'none'; return; }
+  const sorted = fclips.sort((x, y) => {
+    const ix = CLIP_ORDER.indexOf(x.name), iy = CLIP_ORDER.indexOf(y.name);
+    return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
+  });
+  sel.innerHTML = sorted.map(c => `<option value="${c.name}">${clipLabel(c.name)}</option>`).join('');
+  sel.style.display = 'block';
+}
+
+function loadFrame(key, filepath, scale) {
+  const frame = key === 'A' ? frameA : frameB;
+  loadingEl.style.display = 'flex';
+  frame.load(filepath, scale, () => {
+    populateFramePicker(key);
+    const def = defaultClipName(frame.getClips());
+    if (def) { if (battleAnimPickers[key]) battleAnimPickers[key].value = def; playFrame(key, def, 0); }
+    // restore this fighter's status list (single from dropdown, or keep the
+    // multi-status roll) then colour the frame (applyFrameColor sets status+badges)
+    if (multiOn) { if (!battleStatusList[key].length) battleStatusList[key] = rollStatuses(); }
+    else { const v = battleStatusPickers[key] ? parseInt(battleStatusPickers[key].value || '0') : 0; battleStatusList[key] = v > 0 ? [v] : []; }
+    frame.setHolo(document.getElementById('holoToggle').checked);
+    applyFrameColor(key);
+    applyPreset(currentPreset);
+    frame.resize();
+    loadingEl.style.display = 'none';
+  });
+}
+
+function enterBattleMode() {
+  if (viewMode === 'battle') return;
+  viewMode = 'battle';
+  lastSingleFilepath = currentFilepath;
+  if (currentModel) { scene.remove(currentModel); currentModel = null; }
+  if (mixer) { mixer.stopAllAction(); mixer = null; }
+  currentAction = null;
+  controls.autoRotate = false;
+  ensureFrames();
+
+  document.getElementById('canvas').style.display = 'none';
+  document.getElementById('battleStage').classList.add('active');
+  listEl.style.display = 'none';
+  document.getElementById('battlePanel').classList.add('active');
+  document.getElementById('battleControls').classList.add('active');
+  document.getElementById('viewerControls').style.display = 'none';
+  if (animPicker) animPicker.style.display = 'none';
+  nameTag.textContent = '';
+  populateStatusPickers();
+
+  if (!slotAChar.options.length) {
+    const opts = allCharacterOptions();
+    const html = opts.map(o => `<option value="${o.filepath}" data-scale="${o.scale}">${o.label}</option>`).join('');
+    slotAChar.innerHTML = html; slotBChar.innerHTML = html;
+    if ([...slotAChar.options].some(o => o.value === 'models/Neutral-Male.glb'))   slotAChar.value = 'models/Neutral-Male.glb';
+    if ([...slotBChar.options].some(o => o.value === 'models/Neutral-Female.glb')) slotBChar.value = 'models/Neutral-Female.glb';
+  }
+  document.getElementById('statusBadges').style.display = 'none';   // single-view badges
+  if (multiOn) { battleStatusList.A = rollStatuses(); battleStatusList.B = rollStatuses(); }
+  layoutFrames();
+  loadFrame('A', slotAChar.value, parseFloat(slotAChar.selectedOptions[0]?.dataset.scale || '2'));
+  loadFrame('B', slotBChar.value, parseFloat(slotBChar.selectedOptions[0]?.dataset.scale || '2'));
+  applyPreset('front');
+  updateRollVisibility();
+}
+
+function exitBattleMode() {
+  if (viewMode !== 'battle') return;
+  viewMode = 'single';
+  stopBattleSeq();
+  document.getElementById('battleStage').classList.remove('active');
+  document.getElementById('canvas').style.display = '';
+  document.getElementById('battlePanel').classList.remove('active');
+  document.getElementById('battleControls').classList.remove('active');
+  document.getElementById('viewerControls').style.display = '';
+  listEl.style.display = '';
+  document.getElementById('badgesA').style.display = 'none';
+  document.getElementById('badgesB').style.display = 'none';
+  document.querySelectorAll('.frame-refresh').forEach(b => b.style.display = 'none');
+  updateRollVisibility();
+  // reset to the single-view default camera, then reload the last single character
+  camera.position.set(0, 1.2, 3.5);
+  controls.target.set(0, 0.9, 0); controls.update();
+  const active = document.querySelector('.char-item.active');
+  if (active) active.click();
+  else if (lastSingleFilepath) loadCharacter(lastSingleFilepath, false, 2.0);
+}
+
+// ── Auto-fight sequence: A↔B trade attack/hit ×5, then B dies ──
+let battleSeqOn = false;
+let battleSeqTimers = [];
+function stopBattleSeq() {
+  battleSeqOn = false;
+  battleSeqTimers.forEach(clearTimeout); battleSeqTimers = [];
+  const btn = document.getElementById('battleSeqBtn');
+  btn.textContent = 'BATTLE: OFF'; btn.classList.remove('active');
+  if (frameA) { playFrame('A', RESTING, 0.3); if (battleAnimPickers.A) battleAnimPickers.A.value = RESTING; }
+  if (frameB) { playFrame('B', RESTING, 0.3); if (battleAnimPickers.B) battleAnimPickers.B.value = RESTING; }
+}
+function startBattleSeq() {
+  if (!frameA || !frameB) return;
+  battleSeqOn = true;
+  battleSeqTimers = [];   // fresh timer set (prevents accumulation across loops)
+  const btn = document.getElementById('battleSeqBtn');
+  btn.textContent = 'BATTLE: ON'; btn.classList.add('active');
+  const at = (ms, fn) => battleSeqTimers.push(setTimeout(fn, ms));
+  const step = 1300; let t = 0;
+  for (let i = 0; i < 5; i++) {                       // 5 exchanges
+    at(t, () => { playFrame('A', 'attack', 0.12); playFrame('B', 'hit', 0.12); }); t += step;
+    at(t, () => { playFrame('B', 'attack', 0.12); playFrame('A', 'hit', 0.12); }); t += step;
+  }
+  at(t, () => { playFrame('A', RESTING, 0.3); playFrame('B', 'death', 0.2); }); t += step; // right dies
+  at(t + 900, () => { if (battleSeqOn) startBattleSeq(); });   // hold the death beat, then replay from the top
+}
+document.getElementById('battleSeqBtn').addEventListener('click', () => {
+  battleSeqOn ? stopBattleSeq() : startBattleSeq();
+});
+
+// Wire battle controls
+slotAChar.addEventListener('change', e => loadFrame('A', e.target.value, parseFloat(e.target.selectedOptions[0]?.dataset.scale || '2')));
+slotBChar.addEventListener('change', e => loadFrame('B', e.target.value, parseFloat(e.target.selectedOptions[0]?.dataset.scale || '2')));
+// Manual picker selection loops the chosen clip (even one-shots like attack/hit/death)
+battleAnimPickers.A.addEventListener('change', e => { playFrame('A', e.target.value, 0.3, true); e.target.blur(); });
+battleAnimPickers.B.addEventListener('change', e => { playFrame('B', e.target.value, 0.3, true); e.target.blur(); });
+battleStatusPickers.A.addEventListener('change', e => { const v = parseInt(e.target.value); battleStatusList.A = v > 0 ? [v] : []; applyFrameColor('A'); e.target.blur(); });
+battleStatusPickers.B.addEventListener('change', e => { const v = parseInt(e.target.value); battleStatusList.B = v > 0 ? [v] : []; applyFrameColor('B'); e.target.blur(); });
+document.querySelectorAll('#battleControls button').forEach(b =>
+  b.addEventListener('click', () => { applyPreset(b.dataset.preset); b.blur(); }));
+
+// ── Multi-status tester ───────────────────────────────────────────────────────
+// Toggle assigns 2–3 random statuses; dominant → outline/bg/tint, 2nd → particles,
+// all shown as colour-coded chips. Works in single (Round 1/2) + battle (per fighter).
+let multiOn = false;
+let singleStatusList = [];
+let savedFilterKey = currentColorKey, savedStatus = currentStatus;
+const statusBadgesEl = document.getElementById('statusBadges');
+
+// Inner SVG markup per status index (stroke = currentColor → inherits chip colour).
+const STATUS_GLYPHS = {
+  1:  '<path d="m17 11-5-5-5 5"/><path d="m17 18-5-5-5 5"/>',                          // Vigor — chevrons up
+  2:  '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>', // Strike — zap
+  3:  '<path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/>', // Burn — flame
+  4:  '<path d="M15 22a1 1 0 0 0 1-1v-1a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20v1a1 1 0 0 0 1 1z"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/>', // Corrosion — skull
+  5:  '<path d="M5 12h14"/><path d="M12 5v14"/>',                                        // Regen — plus
+  6:  '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>', // Block — shield
+  7:  '<path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 8-4 4 4 4"/>',            // Reflect — bounce
+  8:  '<path d="m7 6 5 5 5-5"/><path d="m7 13 5 5 5-5"/>',                                // Weak — chevrons down
+  9:  '<path d="M13 2 7 13l4 1-3 8"/>',                                                   // Frail — crack
+  10: '<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>',                               // Leech — droplet
+  11: '<path d="M12 3v18"/><path d="M3 12h18"/><path d="m5.6 5.6 12.8 12.8"/><path d="m18.4 5.6-12.8 12.8"/>', // Clear — burst
+  12: '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',                   // Purge — ban
+};
+
+function rollStatuses() {
+  const n = 2 + Math.floor(Math.random() * 4);                 // 2–5 (only 2 render; rest are chips)
+  const pool = []; for (let i = 1; i < STATUS_META.length; i++) pool.push(i);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  return pool.slice(0, n);
+}
+function statusHex(idx) { const m = STATUS_META[idx]; return (m && PALETTE[m.color]) ? PALETTE[m.color].hex : '#888'; }
+const REFRESH_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>';
+function renderBadges(container, list, scope) {
+  const chips = (list || []).map(i => {
+    const hex = statusHex(i), m = STATUS_META[i];
+    // Glyphs are the default chip now.
+    return `<span class="status-chip glyph" title="${m.label}" style="color:${hex}">` +
+      `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STATUS_GLYPHS[i] || ''}</svg></span>`;
+    // ── Text-chip version (kept for reference) ──
+    // return `<span class="status-chip" style="color:${hex}">${m.abbr}</span>`;
+  }).join('');
+  // Single view keeps an inline re-roll chip next to the statuses; battle frames
+  // use a FIXED button below each frame (added in HTML) so it never shifts with chip count.
+  const refresh = scope === 'single'
+    ? `<button class="status-chip status-refresh" data-scope="${scope}" title="Re-roll statuses">${REFRESH_SVG}</button>`
+    : '';
+  container.innerHTML = chips + refresh;
+}
+function renderFrameBadges(key) {
+  const cont = document.getElementById(key === 'A' ? 'badgesA' : 'badgesB');
+  renderBadges(cont, battleStatusList[key], key);
+  const show = multiOn && battleStatusList[key].length;
+  cont.style.display = show ? 'block' : 'none';
+  const btn = document.querySelector(`.frame-refresh[data-scope="${key}"]`);
+  if (btn) btn.style.display = show ? 'block' : 'none';
+}
+function handleRefresh(scope) {
+  if (scope === 'single') { singleStatusList = rollStatuses(); applySingleMulti(); }
+  else { battleStatusList[scope] = rollStatuses(); applyFrameColor(scope); }
+}
+['statusBadges', 'badgesA', 'badgesB'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    const b = e.target.closest('.status-refresh'); if (b) handleRefresh(b.dataset.scope);
+  });
+});
+// Fixed re-roll buttons below the battle frames
+document.querySelectorAll('.frame-refresh').forEach(btn => {
+  btn.addEventListener('click', () => handleRefresh(btn.dataset.scope));
+});
+
+// Single view: dominant drives colour/bg/tint, 2nd drives particles, chips show all.
+function applySingleMulti() {
+  if (!singleStatusList.length) singleStatusList = rollStatuses();
+  const dom = singleStatusList[0], part = singleStatusList[1] || 0;
+  currentColorKey = STATUS_META[dom].color;
+  applyTint(currentColorKey);
+  currentStatus = part;
+  statusPass.uniforms.status.value = part; statusPass.enabled = part > 0;
+  renderBadges(statusBadgesEl, singleStatusList, 'single');
+  statusBadgesEl.style.display = 'block';
+}
+
+function updateRollVisibility() {
+  document.getElementById('statusPicker').disabled = multiOn;
+  if (battleStatusPickers.A) battleStatusPickers.A.disabled = multiOn;
+  if (battleStatusPickers.B) battleStatusPickers.B.disabled = multiOn;
+  if (!multiOn) {
+    statusBadgesEl.style.display = 'none';
+    document.getElementById('badgesA').style.display = 'none';
+    document.getElementById('badgesB').style.display = 'none';
+    document.querySelectorAll('.frame-refresh').forEach(b => b.style.display = 'none');
+  }
+}
+
+function rollCurrentMode() {
+  if (viewMode === 'battle') {
+    battleStatusList.A = rollStatuses(); battleStatusList.B = rollStatuses();
+    applyFrameColor('A'); applyFrameColor('B');
+  } else {
+    singleStatusList = rollStatuses(); applySingleMulti();
+  }
+}
+
+document.getElementById('multiToggle').addEventListener('change', e => {
+  multiOn = e.target.checked;
+  document.getElementById('multiWrap').classList.toggle('active', multiOn);
+  if (multiOn) {
+    if (viewMode === 'single') { savedFilterKey = currentColorKey; savedStatus = currentStatus; }
+    updateRollVisibility();
+    rollCurrentMode();
+  } else {
+    updateRollVisibility();
+    if (viewMode === 'battle') {
+      for (const k of ['A', 'B']) {
+        const v = parseInt(battleStatusPickers[k].value || '0');
+        battleStatusList[k] = v > 0 ? [v] : [];
+        applyFrameColor(k);
+      }
+    } else {
+      currentColorKey = savedFilterKey; applyTint(currentColorKey);
+      currentStatus = savedStatus;
+      statusPass.uniforms.status.value = savedStatus; statusPass.enabled = savedStatus > 0;
+    }
+  }
+});
+
 
 // ── Render loop ──────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
-  if (mixer) mixer.update(dt);
+
+  if (viewMode === 'battle') {
+    if (frameA) frameA.update(dt);   // each frame updates its own mixer + renders its composer
+    if (frameB) frameB.update(dt);
+    return;
+  }
+
+  if (mixer && !animFrozen) mixer.update(dt);
   controls.update();
 
   const elapsed = clock.getElapsedTime();
