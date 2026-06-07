@@ -2476,8 +2476,9 @@ function enterBattleMode() {
     const opts = allCharacterOptions();
     const html = opts.map(o => `<option value="${o.filepath}" data-scale="${o.scale}">${o.label}</option>`).join('');
     slotAChar.innerHTML = html; slotBChar.innerHTML = html;
-    if ([...slotAChar.options].some(o => o.value === 'models/Neutral-Male.glb'))   slotAChar.value = 'models/Neutral-Male.glb';
-    if ([...slotBChar.options].some(o => o.value === 'models/Neutral-Female.glb')) slotBChar.value = 'models/Neutral-Female.glb';
+    // Defaults: Fighter A = Base Alt Male 1, Fighter B = Boss Male 4 (both fully animated)
+    if ([...slotAChar.options].some(o => o.value === 'models/Maimed Purple Tech.glb')) slotAChar.value = 'models/Maimed Purple Tech.glb';
+    if ([...slotBChar.options].some(o => o.value === 'models/bosses/boss_green_mech_walking.glb')) slotBChar.value = 'models/bosses/boss_green_mech_walking.glb';
   }
   document.getElementById('statusBadges').style.display = 'none';   // single-view badges
   if (multiOn) { battleStatusList.A = rollStatuses(); battleStatusList.B = rollStatuses(); }
