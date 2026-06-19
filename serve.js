@@ -15,6 +15,7 @@ const MIME = {
   '.gltf': 'model/gltf+json',
   '.png':  'image/png',
   '.jpg':  'image/jpeg',
+  '.svg':  'image/svg+xml',
   '.json': 'application/json',
 };
 
